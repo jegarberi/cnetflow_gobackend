@@ -123,12 +123,31 @@ func getFlowsDB() map[int64]map[int64]*FlowGEO {
 				}
 				log.Println(addr)
 				err = config.mmdb.Lookup(addr).Decode(&record)
+				err = config.mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Latitude, "location", "latitude")
+				err = config.mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Longitude, "location", "longitude")
+				log.Println(record)
+				addr, err = netip.ParseAddr(flow_geo.DstAddr.String())
+				if err != nil {
+					log.Println(err.Error())
+				}
+				log.Println(addr)
+				err = config.mmdb.Lookup(addr).Decode(&record)
+				err = config.mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Latitude, "location", "latitude")
+				err = config.mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Longitude, "location", "longitude")
+				log.Println(record)
 
 			} else {
 				flowsGeo[flow.SrcAddr][flow.DstAddr].Packets = flowsGeo[flow.SrcAddr][flow.DstAddr].Packets + flow.DPkts
 				flowsGeo[flow.SrcAddr][flow.DstAddr].Octets = flowsGeo[flow.SrcAddr][flow.DstAddr].Octets + flow.DOctets
 			}
-
+			if flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Latitude == 0 && flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Longitude == 0 {
+				flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Latitude = -34.5823511
+				flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Longitude = -58.6027697
+			}
+			if flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Latitude == 0 && flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Longitude == 0 {
+				flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Latitude = -34.5823511
+				flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Longitude = -58.6027697
+			}
 		}
 		if err != nil {
 			log.Println(err.Error())

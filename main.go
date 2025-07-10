@@ -8,10 +8,22 @@ import (
 	_ "github.com/lib/pq" // The underscore is intentional - it's a blank import
 	"github.com/oschwald/maxminddb-golang/v2"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/netip"
 	"os"
+)
+
+const (
+	// Earth's radius in various units
+	EarthRadiusKM     = 6371.0088
+	EarthRadiusMiles  = 3958.7613
+	EarthRadiusMeters = 6371008.8
+
+	// Conversion factors
+	RadiansPerDegree = math.Pi / 180.0
+	DegreesPerRadian = 180.0 / math.Pi
 )
 
 type Config struct {
@@ -26,11 +38,36 @@ type Coordinates struct {
 	Latitude  float64
 	Longitude float64
 }
+
+func (p Coordinates) Haversine(p2 Coordinates) float64 {
+	lat1 := p.Latitude * RadiansPerDegree
+	lon1 := p.Longitude * RadiansPerDegree
+	lat2 := p2.Latitude * RadiansPerDegree
+	lon2 := p2.Longitude * RadiansPerDegree
+
+	diffLat := lat2 - lat1
+	diffLon := lon2 - lon1
+
+	a := math.Pow(math.Sin(diffLat/2), 2) +
+		math.Cos(lat1)*math.Cos(lat2)*
+			math.Pow(math.Sin(diffLon/2), 2)
+
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+
+	return EarthRadiusKM * c
+}
+
+// HaversineMeters returns the distance in meters
+func (p Coordinates) HaversineMeters(p2 Coordinates) float64 {
+	return p.Haversine(p2) * 1000
+}
+
 type FlowGEO struct {
 	SrcAddr  net.IP
 	DstAddr  net.IP
 	SrcCoord Coordinates
 	DstCoord Coordinates
+	Distance float64
 	Octets   int64
 	Packets  int64
 }
@@ -70,7 +107,7 @@ func int64ToIPv4(intIP int64) net.IP {
 
 // TIP <p>To run your code, right-click the code and select <b>Run</b>.</p> <p>Alternatively, click
 // the <icon src="AllIcons.Actions.Execute"/> icon in the gutter and select the <b>Run</b> menu item from here.</p>
-func getFlowsDB() map[int64]map[int64]*FlowGEO {
+func getFlowsDB() []FlowGEO {
 	var flowsGeo map[int64]map[int64]*FlowGEO
 	flowsGeo = make(map[int64]map[int64]*FlowGEO)
 	rows, err := config.db.Query("select * from flows_v9")
@@ -121,20 +158,20 @@ func getFlowsDB() map[int64]map[int64]*FlowGEO {
 				if err != nil {
 					log.Println(err.Error())
 				}
-				log.Println(addr)
+				//log.Println(addr)
 				err = config.mmdb.Lookup(addr).Decode(&record)
 				err = config.mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Latitude, "location", "latitude")
 				err = config.mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Longitude, "location", "longitude")
-				log.Println(record)
+				//log.Println(record)
 				addr, err = netip.ParseAddr(flow_geo.DstAddr.String())
 				if err != nil {
 					log.Println(err.Error())
 				}
-				log.Println(addr)
+				//log.Println(addr)
 				err = config.mmdb.Lookup(addr).Decode(&record)
 				err = config.mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Latitude, "location", "latitude")
 				err = config.mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Longitude, "location", "longitude")
-				log.Println(record)
+				//log.Println(record)
 
 			} else {
 				flowsGeo[flow.SrcAddr][flow.DstAddr].Packets = flowsGeo[flow.SrcAddr][flow.DstAddr].Packets + flow.DPkts
@@ -148,14 +185,43 @@ func getFlowsDB() map[int64]map[int64]*FlowGEO {
 				flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Latitude = -34.5823511
 				flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Longitude = -58.6027697
 			}
+			flowsGeo[flow.SrcAddr][flow.DstAddr].Distance = flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.HaversineMeters(flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord)
+			//fmt.Println(flowsGeo[flow.SrcAddr][flow.DstAddr].Distance)
 		}
 		if err != nil {
 			log.Println(err.Error())
 		}
-		fmt.Println(flow)
 
 	}
-	return flowsGeo
+	var flowsGEOPruned map[Coordinates]map[Coordinates]*FlowGEO
+	flowsGEOPruned = make(map[Coordinates]map[Coordinates]*FlowGEO)
+	for _, f1 := range flowsGeo {
+		for _, f2 := range f1 {
+
+			if _, exists := flowsGEOPruned[f2.SrcCoord]; !exists {
+				flowsGEOPruned[f2.SrcCoord] = make(map[Coordinates]*FlowGEO)
+			}
+			if _, exists := flowsGEOPruned[f2.SrcCoord][f2.DstCoord]; !exists {
+				flowsGEOPruned[f2.SrcCoord][f2.DstCoord] = &FlowGEO{}
+				flowsGEOPruned[f2.SrcCoord][f2.DstCoord].SrcCoord = f2.SrcCoord
+				flowsGEOPruned[f2.SrcCoord][f2.DstCoord].DstCoord = f2.DstCoord
+				flowsGEOPruned[f2.SrcCoord][f2.DstCoord].Distance = f2.Distance
+				flowsGEOPruned[f2.SrcCoord][f2.DstCoord].Octets = f2.Octets
+				flowsGEOPruned[f2.SrcCoord][f2.DstCoord].Packets = f2.Packets
+			} else {
+				flowsGEOPruned[f2.SrcCoord][f2.DstCoord].Octets = flowsGEOPruned[f2.SrcCoord][f2.DstCoord].Octets + f2.Octets
+				flowsGEOPruned[f2.SrcCoord][f2.DstCoord].Packets = flowsGEOPruned[f2.SrcCoord][f2.DstCoord].Packets + f2.Packets
+			}
+		}
+	}
+	var FlowsGEOArray []FlowGEO
+	FlowsGEOArray = []FlowGEO{}
+	for _, f1 := range flowsGeo {
+		for _, f2 := range f1 {
+			FlowsGEOArray = append(FlowsGEOArray, *f2)
+		}
+	}
+	return FlowsGEOArray
 }
 func getFlows(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

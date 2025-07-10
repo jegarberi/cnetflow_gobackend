@@ -60,6 +60,7 @@
         <div id="timeDisplay"></div>
     </div>
     <!-- Add this section to your existing controls div -->
+    <!--
     <div style="margin-top: 15px; border-top: 1px solid #666; padding-top: 15px;">
         <h4 style="margin: 5px 0;">Arc Visualization</h4>
         <div style="margin-bottom: 10px;">
@@ -119,6 +120,7 @@
         </div>
 
     </div>
+    -->
 </div>
 
 <script type="module">
@@ -774,6 +776,7 @@
     const stopButton = document.getElementById('stopAnimation');
 
     // Add arc control event listeners
+    /*
     document.getElementById('demoArcs').addEventListener('click', demonstrateArcs);
     document.getElementById('networkFlow').addEventListener('click', simulateNetworkFlow);
     document.getElementById('clearArcs').addEventListener('click', () => {
@@ -792,8 +795,9 @@
     durationSlider.addEventListener('input', function () {
         durationValue.textContent = this.value + 'ms';
     });
-
+    */
     // Custom arc creation
+    /*
     document.getElementById('drawCustomArc').addEventListener('click', () => {
         const startLat = parseFloat(document.getElementById('startLat').value);
         const startLon = parseFloat(document.getElementById('startLon').value);
@@ -814,11 +818,14 @@
             });
         }
     });
-
+    */
     // Update arc counter periodically
+    /*
     setInterval(() => {
         document.getElementById('arcCount').textContent = arcManager.getActiveArcCount();
     }, 500);
+    */
+
     // Set initial values
     const now = new Date();
     currentAnimatedTime = new Date(now);
@@ -1126,6 +1133,64 @@
     updateSunAndEarth(now);
     updateInfo(now);
 
+    function get_flows(){
+        var xmlHttp = new XMLHttpRequest();
+        xmlHttp.open( "GET", "../flows", false ); // false for synchronous request
+        xmlHttp.send( null );
+
+        return JSON.parse(xmlHttp.responseText);
+    }
+    function draw_flows(){
+        var flows = get_flows();
+        for (var index in flows){
+            var flow = flows[index];
+            const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff];
+            const animTypes = ['flow', 'draw', 'pulse'];
+
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const animType = animTypes[Math.floor(Math.random() * animTypes.length)];
+            if (flow.Distance > 0){
+                createArc(flow.SrcCoord.Latitude, flow.SrcCoord.Longitude, flow.DstCoord.Latitude, flow.DstCoord.Longitude, {
+                    color: color,
+                    width: flow.Octets   ,
+                    duration: 5000,
+                    arcHeight: flow.Distance / 1000000 * 10 + 0,
+                    animationType: animTypes[1],
+                    pulseEffect: 0,
+                    particleCount: flow.Packets
+                });
+            debugger;
+            }
+        /*
+        for (var flow_1 in flows){
+            for (var flow_2 in flows[flow_1]) {
+                //console.log(flows[flow_1][flow_2]);
+                var flow = flows[flow_1][flow_2];
+                const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff];
+                const animTypes = ['flow', 'draw', 'pulse'];
+
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const animType = animTypes[Math.floor(Math.random() * animTypes.length)];
+                if (flow.SrcCoord.Latitude != flow.DstCoord.Latitude || flow.SrcCoord.Longitude != flow.DstCoord.Longitude){
+                    createArc(flow.SrcCoord.Latitude, flow.SrcCoord.Longitude, flow.DstCoord.Latitude, flow.DstCoord.Longitude, {
+                        color: color,
+                        width: flow.Octets   ,
+                        duration: 60000,
+                        arcHeight: flow.Distance / 1000000 * 15 + 0,
+                        animationType: animTypes[1],
+                        pulseEffect: 0,
+                        particleCount: flow.Packets
+                    });
+                    debugger;
+                }
+            }
+
+        */
+        }
+
+    }
+    draw_flows();
+    var interval = setInterval(() => draw_flows(), 10000);
 </script>
 </body>
 </html>

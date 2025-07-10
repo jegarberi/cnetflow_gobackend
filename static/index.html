@@ -16,7 +16,7 @@
     <script type="importmap">
         {
           "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.module.js",
+            "three": "./three.module.js",
             "three/examples/": "https://cdn.jsdelivr.net/npm/three@0.154.0/examples/jsm/"
           }
         }
@@ -29,7 +29,7 @@
 
     <div style="margin-bottom: 10px;">
         <label>Date: </label>
-        <input id="dateInput" style="margin-left: 5px;" type="date">
+        <label for="dateInput"></label><input id="dateInput" style="margin-left: 5px;" type="date">
     </div>
 
     <div style="margin-bottom: 10px;">
@@ -125,7 +125,7 @@
 
 <script type="module">
     import * as THREE from 'three';
-    import {OrbitControls} from 'three/examples/controls/OrbitControls.js';
+    import {OrbitControls} from './OrbitControls.js';
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 1000);
@@ -1132,18 +1132,20 @@
     // Initialize with current time
     updateSunAndEarth(now);
     updateInfo(now);
-
+    var last = 0;
     function get_flows(){
         var xmlHttp = new XMLHttpRequest();
-        xmlHttp.open( "GET", "../flows", false ); // false for synchronous request
+        xmlHttp.open( "GET", "../flows/"+last, false ); // false for synchronous request
         xmlHttp.send( null );
 
         return JSON.parse(xmlHttp.responseText);
     }
+
     function draw_flows(){
         var flows = get_flows();
-        for (var index in flows){
-            var flow = flows[index];
+        last = flows.Last;
+        for (var index in flows["Fdb"]){
+            var flow = flows["Fdb"][index];
             const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff];
             const animTypes = ['flow', 'draw', 'pulse'];
 
@@ -1152,12 +1154,12 @@
             if (flow.Distance > 0){
                 createArc(flow.SrcCoord.Latitude, flow.SrcCoord.Longitude, flow.DstCoord.Latitude, flow.DstCoord.Longitude, {
                     color: color,
-                    width: flow.Octets,
+                    width: flow.Octets  / 1000000 + 1,
                     duration: 5000,
                     arcHeight: flow.Distance / 1000000 * 10 + 0,
                     animationType: animTypes[1],
                     pulseEffect: 0,
-                    particleCount: flow.Packets
+                    particleCount: flow.Packets / 1000000 + 1
                 });
             debugger;
             }
@@ -1190,7 +1192,7 @@
 
     }
     draw_flows();
-    var interval = setInterval(() => draw_flows(), 10000);
+    var interval = setInterval(() => draw_flows(), 5000);
 </script>
 </body>
 </html>

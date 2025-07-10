@@ -13,17 +13,18 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"strconv"
 )
 
 const (
 	// Earth's radius in various units
-	EarthRadiusKM     = 6371.0088
-	EarthRadiusMiles  = 3958.7613
-	EarthRadiusMeters = 6371008.8
+	EarthRadiusKM = 6371.0088
+	//EarthRadiusMiles  = 3958.7613
+	//EarthRadiusMeters = 6371008.8
 
 	// Conversion factors
 	RadiansPerDegree = math.Pi / 180.0
-	DegreesPerRadian = 180.0 / math.Pi
+	//DegreesPerRadian = 180.0 / math.Pi
 )
 
 type Config struct {
@@ -71,6 +72,12 @@ type FlowGEO struct {
 	Octets   int64
 	Packets  int64
 }
+
+type ReturnStruct struct {
+	Fdb  []FlowGEO
+	Last int64
+}
+
 type FlowDB struct {
 	ID       uint64 `json:"id" db:"id"`
 	SrcAddr  int64  `json:"srcaddr" db:"srcaddr"`
@@ -107,13 +114,24 @@ func int64ToIPv4(intIP int64) net.IP {
 
 // TIP <p>To run your code, right-click the code and select <b>Run</b>.</p> <p>Alternatively, click
 // the <icon src="AllIcons.Actions.Execute"/> icon in the gutter and select the <b>Run</b> menu item from here.</p>
-func getFlowsDB() []FlowGEO {
+func getFlowsDB(last int64) ([]FlowGEO, int64) {
 	var flowsGeo map[int64]map[int64]*FlowGEO
 	flowsGeo = make(map[int64]map[int64]*FlowGEO)
-	rows, err := config.db.Query("select * from flows_v9")
+	var max_last int64
+	max_last = 0
+	var rows *sql.Rows
+	var err error
+	last = 0
+	rows, err = config.db.Query("select * from flows_v9 where last >= $1", last)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println(err.Error())
+		}
+	}(rows)
 	for rows.Next() {
 		//var row Row
 		var flow FlowDB
@@ -138,8 +156,13 @@ func getFlowsDB() []FlowGEO {
 			&flow.First,
 			&flow.Last,
 		)
+
 		if flow.SrcAddr != 0 && flow.DstAddr != 0 {
 			flow_geo := FlowGEO{}
+			if flow.Last > max_last {
+				max_last = flow.Last
+			}
+
 			if _, exists := flowsGeo[flow.SrcAddr]; !exists {
 				flowsGeo[flow.SrcAddr] = make(map[int64]*FlowGEO)
 			}
@@ -197,7 +220,9 @@ func getFlowsDB() []FlowGEO {
 	flowsGEOPruned = make(map[Coordinates]map[Coordinates]*FlowGEO)
 	for _, f1 := range flowsGeo {
 		for _, f2 := range f1 {
-
+			if f2.Distance == 0 {
+				continue
+			}
 			if _, exists := flowsGEOPruned[f2.SrcCoord]; !exists {
 				flowsGEOPruned[f2.SrcCoord] = make(map[Coordinates]*FlowGEO)
 			}
@@ -216,22 +241,36 @@ func getFlowsDB() []FlowGEO {
 	}
 	var FlowsGEOArray []FlowGEO
 	FlowsGEOArray = []FlowGEO{}
-	for _, f1 := range flowsGeo {
+	for _, f1 := range flowsGEOPruned {
 		for _, f2 := range f1 {
 			FlowsGEOArray = append(FlowsGEOArray, *f2)
 		}
 	}
-	return FlowsGEOArray
+	return FlowsGEOArray, max_last
 }
 func getFlows(w http.ResponseWriter, r *http.Request) {
+	rs := ReturnStruct{}
 	w.Header().Set("Content-Type", "application/json")
-	flows := getFlowsDB()
-	jsonBytes, err := json.Marshal(flows)
+	lastStr := r.PathValue("last")
+	last, err := strconv.ParseInt(lastStr, 10, 64)
+	if err != nil {
+		//log.Println(err.Error())
+		last = 0
+	}
+	rs.Fdb, last = getFlowsDB(last)
+
+	//rs.Last = time.Now().Unix()
+	rs.Last = last
+	jsonBytes, err := json.Marshal(rs)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	fmt.Fprintf(w, string(jsonBytes))
-
+	n, err := fmt.Fprintf(w, string(jsonBytes))
+	if err != nil {
+		log.Println(err.Error())
+	} else {
+		log.Printf("Wrote %d bytes...\n", n)
+	}
 }
 func main() {
 	var err error
@@ -272,6 +311,7 @@ func main() {
 	fileServer := http.FileServer(http.Dir("./static"))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {})
 	mux.HandleFunc("/flows", getFlows)
+	mux.HandleFunc("/flows/{last}", getFlows)
 	mux.Handle("/static/", http.StripPrefix("/static/", fileServer))
 	err = http.ListenAndServe(config.bind_address, mux)
 	if err != nil {

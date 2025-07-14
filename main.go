@@ -114,7 +114,7 @@ func int64ToIPv4(intIP int64) net.IP {
 
 // TIP <p>To run your code, right-click the code and select <b>Run</b>.</p> <p>Alternatively, click
 // the <icon src="AllIcons.Actions.Execute"/> icon in the gutter and select the <b>Run</b> menu item from here.</p>
-func getFlowsDB(last int64) ([]FlowGEO, int64) {
+func getFlowsDB(exporter int64, last int64) ([]FlowGEO, int64) {
 	var flowsGeo map[int64]map[int64]*FlowGEO
 	flowsGeo = make(map[int64]map[int64]*FlowGEO)
 	var max_last int64
@@ -122,7 +122,7 @@ func getFlowsDB(last int64) ([]FlowGEO, int64) {
 	var rows *sql.Rows
 	var err error
 	last = 0
-	rows, err = config.db.Query("select * from flows_v9 where last >= $1", last)
+	rows, err = config.db.Query("select * from flows_v9 where exporter = $2 and last >= $1 UNION select * from flows_v5 where exporter = $2 and last >= $1 ", last, exporter)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -257,7 +257,13 @@ func getFlows(w http.ResponseWriter, r *http.Request) {
 		//log.Println(err.Error())
 		last = 0
 	}
-	rs.Fdb, last = getFlowsDB(last)
+	exporterStr := r.PathValue("exporter")
+	exporter, err := strconv.ParseInt(exporterStr, 10, 64)
+	if err != nil {
+		//log.Println(err.Error())
+		exporter = 0
+	}
+	rs.Fdb, last = getFlowsDB(exporter, last)
 
 	//rs.Last = time.Now().Unix()
 	rs.Last = last
@@ -310,8 +316,8 @@ func main() {
 	mux := http.NewServeMux()
 	fileServer := http.FileServer(http.Dir("./static"))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {})
-	mux.HandleFunc("/flows", getFlows)
-	mux.HandleFunc("/flows/{last}", getFlows)
+	mux.HandleFunc("/flows/{exporter}", getFlows)
+	mux.HandleFunc("/flows/{exporter}/{last}", getFlows)
 	mux.Handle("/static/", http.StripPrefix("/static/", fileServer))
 	err = http.ListenAndServe(config.bind_address, mux)
 	if err != nil {

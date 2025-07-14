@@ -33,6 +33,10 @@
     </div>
 
     <div style="margin-bottom: 10px;">
+        <label>Exporter: </label>
+        <label for="exporterInput"></label><input id="exporterInput" style="margin-left: 5px;" type="text" value="-1062706175">
+    </div>
+    <div style="margin-bottom: 10px;">
         <label>Time (UTC): </label>
         <input id="timeInput" step="1" style="margin-left: 5px;" type="time">
     </div>
@@ -206,7 +210,7 @@
             this.segments = options.segments || 64;
             this.fadeOut = options.fadeOut !== false;
             this.pulseEffect = options.pulseEffect || false;
-            this.particleCount = options.particleCount || 1;
+            this.particleCount = options.particleCount || 0;
             this.animationType = options.animationType || 'flow'; // 'flow', 'draw', 'pulse'
 
             // Animation properties
@@ -234,7 +238,8 @@
             // Create material with transparency
             const material = new THREE.LineBasicMaterial({
                 color: this.color,
-                linewidth: this.width,
+                linewidth2: this.width,
+                linewidth: 5,
                 transparent: true,
                 opacity: this.opacity
             });
@@ -1134,8 +1139,9 @@
     updateInfo(now);
     var last = 0;
     function get_flows(){
+    	var exporter = document.getElementById('exporterInput').value;
         var xmlHttp = new XMLHttpRequest();
-        xmlHttp.open( "GET", "../flows/"+last, false ); // false for synchronous request
+        xmlHttp.open( "GET", "../flows/"+exporter+"/"+last, false ); // false for synchronous request
         xmlHttp.send( null );
 
         return JSON.parse(xmlHttp.responseText);
@@ -1152,15 +1158,19 @@
             const color = colors[Math.floor(Math.random() * colors.length)];
             const animType = animTypes[Math.floor(Math.random() * animTypes.length)];
             if (flow.Distance > 0){
-                createArc(flow.SrcCoord.Latitude, flow.SrcCoord.Longitude, flow.DstCoord.Latitude, flow.DstCoord.Longitude, {
+                var timeoutRnd = Math.random() * 300;
+                //setTimeout(() => {
+                    createArc(flow.SrcCoord.Latitude, flow.SrcCoord.Longitude, flow.DstCoord.Latitude, flow.DstCoord.Longitude, {
                     color: color,
                     width: flow.Octets  / 1000000 + 1,
                     duration: 5000,
                     arcHeight: flow.Distance / 1000000 * 10 + 0,
                     animationType: animTypes[1],
                     pulseEffect: 0,
-                    particleCount: flow.Packets / 1000000 + 1
+                    particleCount: 0 , //flow.Packets / 1000000 + 1
                 });
+                    //},timeoutRnd);
+
             debugger;
             }
         /*
@@ -1176,8 +1186,8 @@
                 if (flow.SrcCoord.Latitude != flow.DstCoord.Latitude || flow.SrcCoord.Longitude != flow.DstCoord.Longitude){
                     createArc(flow.SrcCoord.Latitude, flow.SrcCoord.Longitude, flow.DstCoord.Latitude, flow.DstCoord.Longitude, {
                         color: color,
-                        width: flow.Octets   ,
-                        duration: 60000,
+                        width: 5   ,
+                        duration: 5000,
                         arcHeight: flow.Distance / 1000000 * 15 + 0,
                         animationType: animTypes[1],
                         pulseEffect: 0,

@@ -177,7 +177,50 @@
 
         return new THREE.Vector3(x, y, z);
     }
+    function createArcPath2(startPos, endPos, arcHeight = 20) {
+        const distance = startPos.distanceTo(endPos);
+        const globeRadius = 50;
 
+        // Calculate the lift-off height (distance from globe surface)
+        const heightMultiplier = Math.min(distance / 100, 1.5);
+        //const peakHeight = globeRadius + arcHeight + (heightMultiplier * 30);
+        const peakHeight = 60;
+        // Calculate lift-off and landing points (20% of the way from start/end)
+        const liftOffPoint = new THREE.Vector3().lerpVectors(startPos, endPos, 0.2);
+        const landingPoint = new THREE.Vector3().lerpVectors(startPos, endPos, 0.8);
+
+        // Normalize and scale the lift-off and landing points to peak height
+        liftOffPoint.normalize().multiplyScalar(peakHeight);
+        landingPoint.normalize().multiplyScalar(peakHeight);
+
+        // Create multiple points for the parallel section
+        const parallelPoints = [];
+        const numParallelPoints = 3; // Number of points in the parallel section
+
+        for (let i = 0; i <= numParallelPoints; i++) {
+            const t = i / numParallelPoints;
+            const parallelPoint = new THREE.Vector3().lerpVectors(liftOffPoint, landingPoint, t);
+            // Keep these points at the same height (parallel to globe)
+            parallelPoint.normalize().multiplyScalar(peakHeight);
+            parallelPoints.push(parallelPoint);
+        }
+
+        // Create the spline points: start -> liftOff -> parallel points -> landing -> end
+        const splinePoints = [
+            startPos,
+            liftOffPoint,
+            ...parallelPoints,
+            landingPoint,
+            endPos
+        ];
+
+        // Create a Catmull-Rom spline curve
+        const curve = new THREE.CatmullRomCurve3(splinePoints);
+        curve.tension = 0.5; // Adjust tension for smoother curves
+        curve.curveType = 'catmullrom';
+
+        return curve;
+    }
     // Function to create a curved path between two points on a sphere
     function createArcPath(startPos, endPos, arcHeight = 20) {
         const distance = startPos.distanceTo(endPos);
@@ -194,6 +237,7 @@
         const curve = new THREE.QuadraticBezierCurve3(startPos, midPoint, endPos);
         return curve;
     }
+
 
     // Modified AnimatedArc class to attach arcs to the globe
     class AnimatedArc {
@@ -219,7 +263,7 @@
             this.currentProgress = 0;
 
             // Create the arc curve
-            this.curve = createArcPath(this.startPos, this.endPos, this.arcHeight);
+            this.curve = createArcPath2(this.startPos, this.endPos, this.arcHeight);
 
             // Create the arc visual elements
             this.createArcVisual();

@@ -177,6 +177,32 @@
 
         return new THREE.Vector3(x, y, z);
     }
+
+    function createArcPath3(startPos, endPos, arcHeight = 20) {
+        const peakHeight = 60;
+
+        // Calculate lift-off and landing points directly above start and end positions
+        const liftOffPoint = startPos.clone().normalize().multiplyScalar(peakHeight);
+        const landingPoint = endPos.clone().normalize().multiplyScalar(peakHeight);
+
+        // Create the path points: start -> straight up -> parallel -> straight down -> end
+        const pathPoints = [
+            startPos,      // Start on globe surface
+            liftOffPoint,  // Straight up from start
+            landingPoint,  // Straight across at height
+            endPos         // Straight down to end
+        ];
+
+        // Create a linear curve path using LineCurve3 segments
+        const curvePath = new THREE.CurvePath();
+
+        // Add straight line segments
+        curvePath.add(new THREE.LineCurve3(pathPoints[0], pathPoints[1])); // Straight up
+        curvePath.add(new THREE.LineCurve3(pathPoints[1], pathPoints[2])); // Parallel to globe
+        curvePath.add(new THREE.LineCurve3(pathPoints[2], pathPoints[3])); // Straight down
+
+        return curvePath;
+    }
     function createArcPath2(startPos, endPos, arcHeight = 20) {
         const distance = startPos.distanceTo(endPos);
         const globeRadius = 50;
@@ -1207,7 +1233,7 @@
                     createArc(flow.SrcCoord.Latitude, flow.SrcCoord.Longitude, flow.DstCoord.Latitude, flow.DstCoord.Longitude, {
                     color: color,
                     width: flow.Octets  / 1000000 + 1,
-                    duration: 5000,
+                    duration: 30000,
                     arcHeight: flow.Distance / 1000000 * 10 + 0,
                     animationType: animTypes[1],
                     pulseEffect: 0,
@@ -1246,7 +1272,7 @@
 
     }
     draw_flows();
-    var interval = setInterval(() => draw_flows(), 5000);
+    var interval = setInterval(() => draw_flows(), 30000);
 </script>
 </body>
 </html>

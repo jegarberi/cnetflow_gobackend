@@ -5,8 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	_ "github.com/lib/pq" // The underscore is intentional - it's a blank import
-	"github.com/oschwald/maxminddb-golang/v2"
 	"log"
 	"math"
 	"net"
@@ -14,6 +12,9 @@ import (
 	"net/netip"
 	"os"
 	"strconv"
+
+	_ "github.com/lib/pq" // The underscore is intentional - it's a blank import
+	"github.com/oschwald/maxminddb-golang/v2"
 )
 
 const (
@@ -124,7 +125,7 @@ func getFlowsDB(exporter int64, last int64) ([]FlowGEO, int64) {
 	last = 0
 	rows, err = config.db.Query("select * from flows_v9 where exporter = $2 and last >= $1 UNION select * from flows_v5 where exporter = $2 and last >= $1 ", last, exporter)
 	if err != nil {
-		log.Fatal(err.Error())
+		return nil, 0
 	}
 	defer func(rows *sql.Rows) {
 		err := rows.Close()
@@ -248,7 +249,183 @@ func getFlowsDB(exporter int64, last int64) ([]FlowGEO, int64) {
 	}
 	return FlowsGEOArray, max_last
 }
-func getFlows(w http.ResponseWriter, r *http.Request) {
+func getInterfacesRequest(w http.ResponseWriter, r *http.Request) {
+
+	exporterStr := r.PathValue("exporter")
+	log.Println(exporterStr)
+	interfaces, err := getInterfacesList(exporterStr)
+
+	if err != nil {
+		log.Println(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	for _, interfac := range interfaces {
+		var line = ""
+		line = fmt.Sprintf("<li id=\"%d\">[%d] %s %s %d </li>\n", interfac.ID, interfac.Snmp_if, interfac.Descr, interfac.Alias, interfac.Speed)
+		fmt.Fprintf(w, line)
+	}
+
+}
+
+func getInterfacesList(exporter string) ([]Interface, error) {
+	var interfaces []Interface
+
+	var rows *sql.Rows
+	var err error
+	if exporter == "" {
+		log.Println("No exporter")
+		rows, err = config.db.Query("select id,exporter,snmp_index,description,alias,speed,enabled from interfaces ;")
+	} else {
+		log.Println("Exporter: " + exporter)
+		rows, err = config.db.Query("select id,exporter,snmp_index,description,alias,speed,enabled from interfaces where exporter = $1 ;", exporter)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println(err.Error())
+
+		}
+	}(rows)
+
+	for rows.Next() {
+		interfac := Interface{}
+		//var row Row
+		var id sql.NullInt64
+		var exporter sql.NullString
+		var snmp_index sql.NullInt64
+		var description sql.NullString
+		var alias sql.NullString
+		var speed sql.NullInt64
+		var enabled sql.NullBool
+		err := rows.Scan(
+			&id,
+			&exporter,
+			&snmp_index,
+			&description,
+			&alias,
+			&speed,
+			&enabled,
+		)
+		if err != nil {
+			log.Println(err.Error())
+			return nil, err
+		}
+		if !id.Valid {
+			log.Println("No ID")
+			continue
+		}
+		if !exporter.Valid {
+			log.Println("No exporter")
+			continue
+		}
+		if !snmp_index.Valid {
+			log.Println("No snmp_index")
+			continue
+		}
+		if !description.Valid {
+			log.Println("No description")
+			//continue
+		}
+		if !alias.Valid {
+			log.Println("No alias")
+			//continue
+		}
+		if !speed.Valid {
+			log.Println("No speed")
+			//continue
+		}
+		if !enabled.Valid {
+			log.Println("No enabled")
+			//continue
+		}
+		interfac.ID = uint64(id.Int64)
+		interfac.Exporter = exporter.String
+		interfac.Snmp_if = uint64(snmp_index.Int64)
+		interfac.Descr = description.String
+		interfac.Alias = alias.String
+		interfac.Speed = speed.Int64
+		interfac.Enabled = enabled.Bool
+
+		interfaces = append(interfaces, interfac)
+		log.Println(interfac)
+		log.Println(interfaces)
+	}
+	return interfaces, nil
+}
+
+func getExporterList() ([]Exporter, error) {
+	var exporters []Exporter
+
+	var rows *sql.Rows
+	var err error
+
+	rows, err = config.db.Query("select id,ip_bin,ip_inet,name from exporters ;")
+	if err != nil {
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println(err.Error())
+
+		}
+	}(rows)
+
+	for rows.Next() {
+		exporter := Exporter{}
+		//var row Row
+
+		err := rows.Scan(
+			&exporter.ID,
+			&exporter.IP_Bin,
+			&exporter.IP_Inet,
+			&exporter.Name,
+		)
+		if err != nil {
+			log.Println(err.Error())
+			return nil, err
+		}
+		exporters = append(exporters, exporter)
+		log.Println(exporter)
+		log.Println(exporters)
+	}
+	return exporters, nil
+}
+
+func getExportersRequest(w http.ResponseWriter, r *http.Request) {
+
+	//w.Header().Set("Content-Type", "application/json")
+
+	exporters, err := getExporterList()
+
+	if err != nil {
+		log.Println(err.Error())
+	}
+	log.Println(exporters)
+	for _, exporter := range exporters {
+		var line = ""
+		line = fmt.Sprintf("<li id=\"%d\" hx-post=\"./api/v1/interfaces/%d\" hx-target=\"#interfaces\">%s</li>\n", exporter.ID, exporter.ID, exporter.IP_Inet)
+		fmt.Fprintf(w, line)
+	}
+	/*jsonBytes, err := json.Marshal(exporters)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	n, err := fmt.Fprintf(w, string(jsonBytes))
+	//rs.Last = time.Now().Unix()
+	if err != nil {
+		log.Println(err.Error())
+	} else {
+		log.Printf("Wrote %d bytes...\n", n)
+	}*/
+}
+func getFlowsRequest(w http.ResponseWriter, r *http.Request) {
 	rs := ReturnStruct{}
 	w.Header().Set("Content-Type", "application/json")
 	lastStr := r.PathValue("last")
@@ -269,7 +446,8 @@ func getFlows(w http.ResponseWriter, r *http.Request) {
 	rs.Last = last
 	jsonBytes, err := json.Marshal(rs)
 	if err != nil {
-		log.Fatal(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	n, err := fmt.Fprintf(w, string(jsonBytes))
 	if err != nil {
@@ -315,10 +493,14 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	fileServer := http.FileServer(http.Dir("./static"))
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {})
-	mux.HandleFunc("/flows/{exporter}", getFlows)
-	mux.HandleFunc("/flows/{exporter}/{last}", getFlows)
-	mux.Handle("/static/", http.StripPrefix("/static/", fileServer))
+	//mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {})
+	mux.HandleFunc("/api/v1/interfaces", getInterfacesRequest)
+	mux.HandleFunc("/api/v1/interfaces/{exporter}", getInterfacesRequest)
+	mux.HandleFunc("/api/v1/exporters/list", getExportersRequest)
+	mux.HandleFunc("/api/v1/flows/{exporter}", getFlowsRequest)
+	mux.HandleFunc("/api/v1/flows/{exporter}/{last}", getFlowsRequest)
+
+	mux.Handle("/", http.StripPrefix("", fileServer))
 	err = http.ListenAndServe(config.bind_address, mux)
 	if err != nil {
 		log.Fatal(err.Error())

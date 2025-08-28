@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Globo con Iluminación Solar</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "./three.module.js",
+            "three/examples/": "https://cdn.jsdelivr.net/npm/three@0.154.0/examples/jsm/"
+          }
+        }
+    </script>
+</head>
+<body>
+<!-- Add these controls in the body -->
+<div style="position: absolute; top: 10px; left: 10px; z-index: 100; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 5px; color: white; font-family: Arial, sans-serif;">
+    <h3 style="margin-top: 0;">Solar Position Control</h3>
+
+    <div style="margin-bottom: 10px;">
+        <label>Date: </label>
+        <label for="dateInput"></label><input id="dateInput" style="margin-left: 5px;" type="date">
+    </div>
+
+    <div style="margin-bottom: 10px;">
+        <label>Exporter: </label>
+        <label for="exporterInput"></label><input id="exporterInput" style="margin-left: 5px;" type="text" value="-1062706175">
+    </div>
+    <div style="margin-bottom: 10px;">
+        <label>Time (UTC): </label>
+        <input id="timeInput" step="1" style="margin-left: 5px;" type="time">
+    </div>
+
+    <div style="margin-bottom: 10px;">
+        <button id="updateButton">Update Sun Position</button>
+        <button id="currentTimeButton">Current Time</button>
+    </div>
+
+    <div style="margin-bottom: 10px;">
+        <label>Animation Speed: </label>
+        <select id="animationSpeed">
+            <option value="1">Real Time</option>
+            <option value="60">1 min/sec</option>
+            <option value="3600">1 hour/sec</option>
+            <option value="86400">1 day/sec</option>
+        </select>
+        <button id="startAnimation">Start</button>
+        <button id="stopAnimation">Stop</button>
+    </div>
+
+    <div id="sunInfo" style="font-size: 12px; margin-top: 10px;">
+        <div>Solar Position Info:</div>
+        <div id="coordinates"></div>
+        <div id="timeDisplay"></div>
+    </div>
+    <!-- Add this section to your existing controls div -->
+    <!--
+    <div style="margin-top: 15px; border-top: 1px solid #666; padding-top: 15px;">
+        <h4 style="margin: 5px 0;">Arc Visualization</h4>
+        <div style="margin-bottom: 10px;">
+            <button id="demoArcs">Demo Arcs</button>
+            <button id="worldConnections">World Routes</button>
+            <button id="internetTraffic">Internet Traffic</button>
+            <button id="networkFlow">Network Flow</button>
+            <button id="clearArcs">Clear All</button>
+        </div>
+
+        <div style="margin-bottom: 10px;">
+            <label style="font-size: 12px;">Regional Networks:</label>
+            <div style="display: flex; gap: 5px; margin-top: 3px;">
+                <button id="asiaNetwork" style="flex: 1; font-size: 11px;">Asia</button>
+                <button id="europeNetwork" style="flex: 1; font-size: 11px;">Europe</button>
+                <button id="americasNetwork" style="flex: 1; font-size: 11px;">Americas</button>
+            </div>
+        </div>
+
+
+        <div style="margin-bottom: 10px;">
+            <h5 style="margin: 5px 0;">Custom Arc:</h5>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 12px;">
+                <input id="startLat" placeholder="Start Lat" step="0.1" type="number" value="40.7">
+                <input id="startLon" placeholder="Start Lon" step="0.1" type="number" value="-74.0">
+                <input id="endLat" placeholder="End Lat" step="0.1" type="number" value="51.5">
+                <input id="endLon" placeholder="End Lon" step="0.1" type="number" value="-0.1">
+            </div>
+            <div style="margin-top: 5px; display: flex; gap: 5px; align-items: center;">
+                <select id="arcColor" style="flex: 1;">
+                    <option value="0xff0000">Red</option>
+                    <option value="0x00ff00">Green</option>
+                    <option value="0x0080ff">Blue</option>
+                    <option value="0xffff00">Yellow</option>
+                    <option value="0xff00ff">Magenta</option>
+                    <option value="0x00ffff">Cyan</option>
+                </select>
+                <select id="arcType" style="flex: 1;">
+                    <option value="flow">Flow</option>
+                    <option value="draw">Draw</option>
+                    <option value="pulse">Pulse</option>
+                </select>
+            </div>
+            <div style="margin-top: 5px; display: flex; gap: 5px; align-items: center;">
+                <label style="font-size: 11px;">Duration:</label>
+                <input id="arcDuration" max="8000" min="1000" style="flex: 1;" type="range" value="3000">
+                <span id="durationValue" style="font-size: 11px;">3000ms</span>
+            </div>
+            <button id="drawCustomArc" style="width: 100%; margin-top: 5px;">Create Arc</button>
+        </div>
+
+        <div style="font-size: 11px; margin-top: 10px;">
+            <div>Active Arcs: <span id="arcCount">0</span></div>
+            <div style="font-size: 10px; color: #ccc; margin-top: 3px;">
+                Arcs rotate with Earth's time animation
+            </div>
+        </div>
+
+    </div>
+    -->
+</div>
+
+<script type="module">
+    import * as THREE from 'three';
+    import {OrbitControls} from './OrbitControls.js';
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 1000);
+    camera.position.set(0, 0, 200);
+
+    const renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setSize(innerWidth, innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    const textureLoader = new THREE.TextureLoader();
+    const earthColor = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
+
+    let globe = new THREE.Mesh(
+        new THREE.SphereGeometry(50, 64, 64),
+        new THREE.MeshStandardMaterial({
+            map: earthColor
+        })
+    );
+    scene.add(globe);
+
+    // Luz direccional como el Sol
+    let sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    scene.add(sun);
+    const light = new THREE.AmbientLight(0x404040); // soft white light
+    scene.add(light);
+    const sunMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(3, 16, 16),
+        new THREE.MeshBasicMaterial({color: 0xffff66})
+    );
+    scene.add(sunMesh);
+
+    // Add these arc-related functions after your existing Three.js setup
+
+    // Function to convert geographic coordinates to 3D position on the globe
+    function geoToCartesian(lat, lon, radius = 50) {
+        const phi = (90 - lat) * Math.PI / 180; // latitude to spherical coordinate
+        const theta = (lon + 180) * Math.PI / 180; // longitude to spherical coordinate
+
+        const x = -(radius * Math.sin(phi) * Math.cos(theta));
+        const z = (radius * Math.sin(phi) * Math.sin(theta));
+        const y = (radius * Math.cos(phi));
+
+        return new THREE.Vector3(x, y, z);
+    }
+
+    function createArcPath3(startPos, endPos, arcHeight = 20) {
+        const peakHeight = 60;
+
+        // Calculate lift-off and landing points directly above start and end positions
+        const liftOffPoint = startPos.clone().normalize().multiplyScalar(peakHeight);
+        const landingPoint = endPos.clone().normalize().multiplyScalar(peakHeight);
+
+        // Create the path points: start -> straight up -> parallel -> straight down -> end
+        const pathPoints = [
+            startPos,      // Start on globe surface
+            liftOffPoint,  // Straight up from start
+            landingPoint,  // Straight across at height
+            endPos         // Straight down to end
+        ];
+
+        // Create a linear curve path using LineCurve3 segments
+        const curvePath = new THREE.CurvePath();
+
+        // Add straight line segments
+        curvePath.add(new THREE.LineCurve3(pathPoints[0], pathPoints[1])); // Straight up
+        curvePath.add(new THREE.LineCurve3(pathPoints[1], pathPoints[2])); // Parallel to globe
+        curvePath.add(new THREE.LineCurve3(pathPoints[2], pathPoints[3])); // Straight down
+
+        return curvePath;
+    }
+    function createArcPath2(startPos, endPos, arcHeight = 20) {
+        const distance = startPos.distanceTo(endPos);
+        const globeRadius = 50;
+
+        // Calculate the lift-off height (distance from globe surface)
+        const heightMultiplier = Math.min(distance / 100, 1.5);
+        //const peakHeight = globeRadius + arcHeight + (heightMultiplier * 30);
+        const peakHeight = 60;
+        // Calculate lift-off and landing points (20% of the way from start/end)
+        const liftOffPoint = new THREE.Vector3().lerpVectors(startPos, endPos, 0.2);
+        const landingPoint = new THREE.Vector3().lerpVectors(startPos, endPos, 0.8);
+
+        // Normalize and scale the lift-off and landing points to peak height
+        liftOffPoint.normalize().multiplyScalar(peakHeight);
+        landingPoint.normalize().multiplyScalar(peakHeight);
+
+        // Create multiple points for the parallel section
+        const parallelPoints = [];
+        const numParallelPoints = 3; // Number of points in the parallel section
+
+        for (let i = 0; i <= numParallelPoints; i++) {
+            const t = i / numParallelPoints;
+            const parallelPoint = new THREE.Vector3().lerpVectors(liftOffPoint, landingPoint, t);
+            // Keep these points at the same height (parallel to globe)
+            parallelPoint.normalize().multiplyScalar(peakHeight);
+            parallelPoints.push(parallelPoint);
+        }
+
+        // Create the spline points: start -> liftOff -> parallel points -> landing -> end
+        const splinePoints = [
+            startPos,
+            liftOffPoint,
+            ...parallelPoints,
+            landingPoint,
+            endPos
+        ];
+
+        // Create a Catmull-Rom spline curve
+        const curve = new THREE.CatmullRomCurve3(splinePoints);
+        curve.tension = 0.5; // Adjust tension for smoother curves
+        curve.curveType = 'catmullrom';
+
+        return curve;
+    }
+    // Function to create a curved path between two points on a sphere
+    function createArcPath(startPos, endPos, arcHeight = 20) {
+        const distance = startPos.distanceTo(endPos);
+        const midPoint = new THREE.Vector3().addVectors(startPos, endPos).multiplyScalar(0.5);
+
+        // Calculate the arc peak (higher for longer distances)
+        const heightMultiplier = Math.min(distance / 100, 1.5);
+        const peakHeight = 50 + arcHeight + (heightMultiplier * 30);
+
+        // Normalize and scale the midpoint to create the arc peak
+        midPoint.normalize().multiplyScalar(peakHeight);
+
+        // Create a quadratic Bezier curve
+        const curve = new THREE.QuadraticBezierCurve3(startPos, midPoint, endPos);
+        return curve;
+    }
+
+
+    // Modified AnimatedArc class to attach arcs to the globe
+    class AnimatedArc {
+        constructor(startLat, startLon, endLat, endLon, options = {}) {
+            this.startPos = geoToCartesian(startLat, startLon);
+            this.endPos = geoToCartesian(endLat, endLon);
+
+            // Arc options with defaults
+            this.color = options.color || 0x00ff00;
+            this.width = options.width || 2;
+            this.duration = options.duration || 2000; // milliseconds
+            this.arcHeight = options.arcHeight || 20;
+            this.opacity = options.opacity || 0.8;
+            this.segments = options.segments || 64;
+            this.fadeOut = options.fadeOut !== false;
+            this.pulseEffect = options.pulseEffect || false;
+            this.particleCount = options.particleCount || 0;
+            this.animationType = options.animationType || 'flow'; // 'flow', 'draw', 'pulse'
+
+            // Animation properties
+            this.startTime = Date.now();
+            this.isAnimating = true;
+            this.currentProgress = 0;
+
+            // Create the arc curve
+            this.curve = createArcPath2(this.startPos, this.endPos, this.arcHeight);
+
+            // Create the arc visual elements
+            this.createArcVisual();
+
+            // Add to GLOBE instead of scene - this is the key change!
+            globe.add(this.arcGroup);
+        }
+
+        createArcVisual() {
+            this.arcGroup = new THREE.Group();
+
+            // Create the full arc geometry
+            const points = this.curve.getPoints(this.segments);
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+            // Create material with transparency
+            const material = new THREE.LineBasicMaterial({
+                color: this.color,
+                linewidth2: this.width,
+                linewidth: 5,
+                transparent: true,
+                opacity: this.opacity
+            });
+
+            // Create the line mesh
+            this.arcLine = new THREE.Line(geometry, material);
+            this.arcGroup.add(this.arcLine);
+
+            // Create animated particles along the arc
+            this.createParticles();
+
+            // Initially hide the arc for draw animation
+            if (this.animationType === 'draw') {
+                this.arcLine.material.opacity = 0;
+            }
+        }
+
+        createParticles() {
+            this.particles = [];
+
+            for (let i = 0; i < this.particleCount; i++) {
+                const particleGeometry = new THREE.SphereGeometry(0.5, 8, 8);
+                const particleMaterial = new THREE.MeshBasicMaterial({
+                    color: this.color,
+                    transparent: true,
+                    opacity: 0.8
+                });
+
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                this.particles.push({
+                    mesh: particle,
+                    delay: (i / this.particleCount) * 1, // Stagger the particles
+                    progress: 0
+                });
+
+                this.arcGroup.add(particle);
+                particle.visible = false;
+            }
+        }
+
+        update() {
+            if (!this.isAnimating) return false;
+
+            const elapsed = Date.now() - this.startTime;
+            this.currentProgress = Math.min(elapsed / this.duration, 1);
+
+            // Different animation types
+            switch (this.animationType) {
+                case 'draw':
+                    this.updateDrawAnimation();
+                    break;
+                case 'pulse':
+                    this.updatePulseAnimation();
+                    break;
+                case 'flow':
+                default:
+                    this.updateFlowAnimation();
+                    break;
+            }
+
+            // Animate particles
+            this.updateParticles();
+
+            // Check if animation is complete
+            if (this.currentProgress >= 1) {
+                if (this.fadeOut) {
+                    const fadeProgress = Math.min((elapsed - this.duration) / 1000, 1);
+                    const alpha = 1 - fadeProgress;
+
+                    this.arcLine.material.opacity = this.opacity * alpha;
+                    this.particles.forEach(particle => {
+                        if (particle.mesh.visible) {
+                            particle.mesh.material.opacity *= alpha;
+                        }
+                    });
+
+                    if (fadeProgress >= 1) {
+                        this.isAnimating = false;
+                        return false;
+                    }
+                } else {
+                    this.isAnimating = false;
+                }
+            }
+
+            return true;
+        }
+
+        updateDrawAnimation() {
+            // Gradually reveal the arc line
+            const arcProgress = this.currentProgress;
+            this.arcLine.material.opacity = this.opacity * arcProgress;
+
+            // Animate arc drawing by modifying geometry
+            const totalPoints = this.segments + 1;
+            const visiblePoints = Math.floor(totalPoints * arcProgress);
+
+            if (visiblePoints > 1) {
+                const points = this.curve.getPoints(this.segments).slice(0, visiblePoints);
+                this.arcLine.geometry.setFromPoints(points);
+            }
+        }
+
+        updateFlowAnimation() {
+            // Keep the arc line visible throughout
+            this.arcLine.material.opacity = this.opacity;
+        }
+
+        updatePulseAnimation() {
+            // Pulsing opacity effect
+            const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.01);
+            this.arcLine.material.opacity = this.opacity * pulse;
+        }
+
+        updateParticles() {
+            this.particles.forEach((particle, index) => {
+                const particleProgress = Math.max(0, this.currentProgress - particle.delay);
+
+                if (particleProgress > 0 && particleProgress <= 1) {
+                    const position = this.curve.getPoint(particleProgress);
+                    particle.mesh.position.copy(position);
+
+                    // Fade in and out
+                    const fadeIn = Math.min(particleProgress * 4, 1);
+                    const fadeOut = this.fadeOut ? Math.max(1 - (particleProgress - 0.7) * 3.33, 0) : 1;
+                    particle.mesh.material.opacity = 0.8 * fadeIn * fadeOut;
+
+                    // Pulse effect
+                    if (this.pulseEffect) {
+                        const pulse = 1 + 0.3 * Math.sin(Date.now() * 0.01 + index);
+                        particle.mesh.scale.setScalar(pulse);
+                    }
+
+                    particle.mesh.visible = true;
+                } else {
+                    particle.mesh.visible = false;
+                }
+            });
+        }
+
+        remove() {
+            // Remove from globe instead of scene
+            globe.remove(this.arcGroup);
+
+            // Dispose of geometries and materials
+            this.arcLine.geometry.dispose();
+            this.arcLine.material.dispose();
+
+            this.particles.forEach(particle => {
+                particle.mesh.geometry.dispose();
+                particle.mesh.material.dispose();
+            });
+        }
+    }
+
+    // Arc manager to handle multiple arcs
+    class ArcManager {
+        constructor() {
+            this.arcs = [];
+        }
+
+        addArc(startLat, startLon, endLat, endLon, options = {}) {
+            const arc = new AnimatedArc(startLat, startLon, endLat, endLon, options);
+            this.arcs.push(arc);
+            return arc;
+        }
+
+        update() {
+            // Update all arcs and remove completed ones
+            this.arcs = this.arcs.filter(arc => {
+                const shouldContinue = arc.update();
+                if (!shouldContinue) {
+                    arc.remove();
+                }
+                return shouldContinue;
+            });
+        }
+
+        removeAllArcs() {
+            this.arcs.forEach(arc => arc.remove());
+            this.arcs = [];
+        }
+
+        getActiveArcCount() {
+            return this.arcs.length;
+        }
+    }
+
+    // Initialize arc manager
+    const arcManager = new ArcManager();
+
+    // Main function to create arcs - this is your primary interface
+    function createArc(startLat, startLon, endLat, endLon, options = {}) {
+        return arcManager.addArc(startLat, startLon, endLat, endLon, options);
+    }
+
+    // Preset functions for common arc types
+    function createFlowArc(startLat, startLon, endLat, endLon, color = 0x00ff00, width = 2, duration = 3000) {
+        return createArc(startLat, startLon, endLat, endLon, {
+            color: color,
+            width: width,
+            duration: duration,
+            animationType: 'flow',
+            pulseEffect: true
+        });
+    }
+
+    function createDrawArc(startLat, startLon, endLat, endLon, color = 0xff0000, width = 3, duration = 2000) {
+        return createArc(startLat, startLon, endLat, endLon, {
+            color: color,
+            width: width,
+            duration: duration,
+            animationType: 'draw',
+            fadeOut: false
+        });
+    }
+
+    function createPulseArc(startLat, startLon, endLat, endLon, color = 0x0080ff, duration = 4000) {
+        return createArc(startLat, startLon, endLat, endLon, {
+            color: color,
+            width: 4,
+            duration: duration,
+            animationType: 'pulse',
+            pulseEffect: true,
+            fadeOut: false
+        });
+    }
+
+    // Demo functions
+    function demonstrateArcs() {
+        // Flow arc from New York to London
+        createFlowArc(40.7128, -74.0060, 51.5074, -0.1278, 0xff4444, 3, 3000);
+
+        // Draw arc from Tokyo to Sydney
+        setTimeout(() => {
+            createDrawArc(35.6762, 139.6503, -33.8688, 151.2093, 0x44ff44, 2, 2500);
+        }, 500);
+
+        // Pulse arc from Los Angeles to Paris
+        setTimeout(() => {
+            createPulseArc(34.0522, -118.2437, 48.8566, 2.3522, 0x4444ff, 4000);
+        }, 1000);
+    }
+
+    function simulateNetworkFlow() {
+        const locations = [
+            {name: "New York", lat: 40.7128, lon: -74.0060},
+            {name: "London", lat: 51.5074, lon: -0.1278},
+            {name: "Tokyo", lat: 35.6762, lon: 139.6503},
+            {name: "Sydney", lat: -33.8688, lon: 151.2093},
+            {name: "São Paulo", lat: -23.5505, lon: -46.6333},
+            {name: "Mumbai", lat: 19.0760, lon: 72.8777},
+            {name: "Singapore", lat: 1.3521, lon: 103.8198},
+            {name: "Frankfurt", lat: 50.1109, lon: 8.6821}
+        ];
+
+        function createRandomFlow() {
+            const source = locations[Math.floor(Math.random() * locations.length)];
+            let dest = locations[Math.floor(Math.random() * locations.length)];
+
+            while (dest === source) {
+                dest = locations[Math.floor(Math.random() * locations.length)];
+            }
+
+            const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff];
+            const animTypes = ['flow', 'draw', 'pulse'];
+
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const animType = animTypes[Math.floor(Math.random() * animTypes.length)];
+
+            createArc(source.lat, source.lon, dest.lat, dest.lon, {
+                color: color,
+                width: Math.random() * 3 + 1,
+                duration: Math.random() * 2000 + 2000,
+                arcHeight: Math.random() * 20 + 15,
+                animationType: animType,
+                pulseEffect: Math.random() > 0.5
+            });
+
+            // Schedule next flow
+            setTimeout(createRandomFlow, Math.random() * 1500 + 500);
+        }
+
+        createRandomFlow();
+    }
+
+    // Update your animate function to include arc updates
+
+    function getSunPosition(date) {
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        const hours = date.getUTCHours();
+        const minutes = date.getUTCMinutes();
+        const seconds = date.getUTCSeconds();
+
+        // Calculate Julian Day Number
+        const a = Math.floor((14 - month) / 12);
+        const ye = year - a;
+        const m = month + 12 * a - 3;
+        const JDN = day + Math.floor((153 * m + 2) / 5) + 365 * ye + Math.floor(ye / 4) - Math.floor(ye / 100) + Math.floor(ye / 400) - 32045;
+
+        // Calculate Julian Day with time
+        const JD = JDN + (hours - 12) / 24 + minutes / 1440 + seconds / 86400;
+
+        // Number of days since J2000.0
+        const n = JD - 2451545.0;
+
+        // Mean longitude of the Sun
+        const L = (280.460 + 0.9856474 * n) % 360;
+
+        // Mean anomaly of the Sun
+        const g = ((357.528 + 0.9856003 * n) % 360) * Math.PI / 180;
+
+        // Ecliptic longitude of the Sun
+        const lambda = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * Math.PI / 180;
+
+        // Obliquity of the ecliptic
+        const epsilon = (23.439 - 0.0000004 * n) * Math.PI / 180;
+
+        // Right ascension and declination
+        const alpha = Math.atan2(Math.cos(epsilon) * Math.sin(lambda), Math.cos(lambda));
+        const delta = Math.asin(Math.sin(epsilon) * Math.sin(lambda));
+
+        // Greenwich Mean Sidereal Time in radians
+        const GMST = ((280.16 + 360.9856235 * n) % 360) * Math.PI / 180;
+
+        // Convert to Cartesian coordinates
+        const radius = 400;
+
+        // Calculate position before GMST rotation
+        let x = radius * Math.cos(delta) * Math.cos(alpha);
+        let z = radius * Math.cos(delta) * Math.sin(alpha);
+        const y = radius * Math.sin(delta);
+
+        // Apply GMST rotation
+        const tempX = x * Math.cos(GMST) - z * Math.sin(GMST);
+        const tempZ = x * Math.sin(GMST) + z * Math.cos(GMST);
+        x = tempX;
+        z = tempZ;
+
+        // In Three.js, typically:
+        // x is right/left
+        // y is up/down
+        // z is front/back
+        return new THREE.Vector3(x, y, z);
+    }
+    // Improved sun position calculation based on actual astronomical formulas
+    function getSunPosition2(date) {
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1; // JavaScript months are 0-based
+        const day = date.getDate();
+        const hours = date.getUTCHours();
+        const minutes = date.getUTCMinutes();
+        const seconds = date.getUTCSeconds();
+
+        // Calculate Julian Day Number
+        const a = Math.floor((14 - month) / 12);
+        const ye = year - a;
+        const m = month + 12 * a - 3;
+        const JDN = day + Math.floor((153 * m + 2) / 5) + 365 * ye + Math.floor(ye / 4) - Math.floor(ye / 100) + Math.floor(ye / 400) - 32045;
+
+        // Calculate Julian Day with time
+        const JD = JDN + (hours - 12) / 24 + minutes / 1440 + seconds / 86400;
+
+        // Number of days since J2000.0
+        const n = JD - 2451545.0;
+
+        // Mean longitude of the Sun
+        const L = (280.460 + 0.9856474 * n) % 360;
+
+        // Mean anomaly of the Sun
+        const g = ((357.528 + 0.9856003 * n) % 360) * Math.PI / 180;
+
+        // Ecliptic longitude of the Sun
+        const lambda = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * Math.PI / 180;
+
+        // Obliquity of the ecliptic
+        const epsilon = (23.439 - 0.0000004 * n) * Math.PI / 180;
+
+        // Right ascension and declination
+        const alpha = Math.atan2(Math.cos(epsilon) * Math.sin(lambda), Math.cos(lambda));
+        const delta = Math.asin(Math.sin(epsilon) * Math.sin(lambda));
+
+        // Greenwich Mean Sidereal Time
+        const GMST = (280.16 + 360.9856235 * n) % 360;
+
+        // Convert to Cartesian coordinates
+        const radius = 400;
+        const x = radius * Math.cos(delta) * Math.cos(alpha);
+        const y = radius * Math.sin(delta);
+        const z = radius * Math.cos(delta) * Math.sin(alpha);
+
+        return new THREE.Vector3(x, y, z);
+    }
+    function debugSunPath() {
+        const curve = new THREE.CurvePath();
+        const points = [];
+        const now = new Date();
+
+        // Plot positions for 24 hours
+        for(let hour = 0; hour < 24; hour++) {
+            const date = new Date(now);
+            date.setUTCHours(hour, 0, 0, 0);
+            points.push(getSunPosition(date));
+        }
+
+        // Create a line to visualize the path
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({ color: 0xffff00 });
+        const sunPath = new THREE.Line(geometry, material);
+        scene.add(sunPath);
+    }
+    // Calculate Earth's rotation for the given date/time
+    function getEarthRotation(date) {
+        const hours = date.getUTCHours();
+        const minutes = date.getUTCMinutes();
+        const seconds = date.getUTCSeconds();
+
+        // Calculate the rotation angle based on UTC time
+        const timeDecimal = hours + minutes / 60 + seconds / 3600;
+        const rotationAngle = (timeDecimal / 24) * 2 * Math.PI;
+
+        // Greenwich meridian adjustment
+        return -rotationAngle;
+    }
+
+    // Enhanced function to update sun and Earth for specific date/time
+    function updateSunAndEarth(date = new Date()) {
+        // Calculate accurate sun position
+        const sunPos = getSunPosition(date);
+        sun.position.copy(sunPos);
+        sunMesh.position.copy(sunPos);
+
+        // Point the directional light towards Earth's center
+        sun.target.position.set(0, 0, 0);
+
+        // Rotate Earth to match the time
+        const earthRotation = getEarthRotation(date);
+        globe.rotation.y = earthRotation;
+
+        // Add subtle ambient light for realism (only once)
+        if (!scene.getObjectByName('ambientLight')) {
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.2);
+            ambientLight.name = 'ambientLight';
+            scene.add(ambientLight);
+        }
+        debugSunPath();
+    }
+
+    // Function to set specific date and time
+    function setDateTime(year, month, day, hour = 12, minute = 0, second = 0) {
+        const date = new Date(year, month - 1, day, hour, minute, second); // month is 0-based in JavaScript
+        updateSunAndEarth(date);
+        return date;
+    }
+
+    // Function to animate through a day
+
+    function animateDay(date, speedMultiplier = 3600) {
+        let currentTime = new Date(date);
+
+        function animate() {
+            currentTime = new Date(currentTime.getTime() + 1000 * speedMultiplier);
+            updateSunAndEarth(currentTime);
+
+            // Continue animation
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    }
+
+
+    // Example usage:
+    // Set specific date and time
+    // setDateTime(2024, 6, 21, 12, 0, 0); // Summer solstice at noon
+    // setDateTime(2024, 12, 21, 0, 0, 0); // Winter solstice at midnight
+    // setDateTime(2024, 3, 20, 6, 0, 0);  // Spring equinox at sunrise
+
+    // Animate through a full day (uncomment to use)
+    // animateDay(new Date(), 3600); // 1 hour per second
+
+    window.addEventListener('resize', () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+    });
+
+    const clock = new THREE.Clock();
+    // Global animation state
+    let isTimeAnimating = false;
+    let currentAnimatedTime = new Date();
+    let animationSpeed = 1;
+
+    // Clean animate function - no automatic time updates
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // Update arcs
+        arcManager.update();
+
+        // Only update time if animation is running
+        if (isTimeAnimating) {
+            currentAnimatedTime = new Date(currentAnimatedTime.getTime() + 16.67 * animationSpeed);
+            updateSunAndEarth(currentAnimatedTime);
+            updateTimeDisplay(currentAnimatedTime);
+        }
+
+        globe.rotation.y += clock.getDelta() * 0.001;
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    // Updated control functions
+    function updateTimeDisplay(date) {
+        const dateInput = document.getElementById('dateInput');
+        const timeInput = document.getElementById('timeInput');
+        const coordinatesDiv = document.getElementById('coordinates');
+        const timeDisplay = document.getElementById('timeDisplay');
+
+        // Update input fields
+        dateInput.value = date.toISOString().split('T')[0];
+        timeInput.value = date.toISOString().split('T')[1].split('.')[0];
+
+        // Update info display
+        const sunPos = getSunPosition(date);
+        coordinatesDiv.textContent = `Sun: (${sunPos.x.toFixed(1)}, ${sunPos.y.toFixed(1)}, ${sunPos.z.toFixed(1)})`;
+        timeDisplay.textContent = `UTC: ${date.toISOString().replace('T', ' ').split('.')[0]}`;
+    }
+
+    // Initialize controls immediately (no DOMContentLoaded needed)
+    const dateInput = document.getElementById('dateInput');
+    const timeInput = document.getElementById('timeInput');
+    const updateButton = document.getElementById('updateButton');
+    const currentTimeButton = document.getElementById('currentTimeButton');
+    const animationSpeedSelect = document.getElementById('animationSpeed');
+    const startButton = document.getElementById('startAnimation');
+    const stopButton = document.getElementById('stopAnimation');
+
+    // Add arc control event listeners
+    /*
+    document.getElementById('demoArcs').addEventListener('click', demonstrateArcs);
+    document.getElementById('networkFlow').addEventListener('click', simulateNetworkFlow);
+    document.getElementById('clearArcs').addEventListener('click', () => {
+        arcManager.removeAllArcs();
+    });
+    document.getElementById('worldConnections').addEventListener('click', demonstrateWorldConnections);
+    document.getElementById('internetTraffic').addEventListener('click', simulateInternetTraffic);
+
+    document.getElementById('asiaNetwork').addEventListener('click', () => createRegionalConnections('asia'));
+    document.getElementById('europeNetwork').addEventListener('click', () => createRegionalConnections('europe'));
+    document.getElementById('americasNetwork').addEventListener('click', () => createRegionalConnections('americas'));
+
+    // Duration slider update
+    const durationSlider = document.getElementById('arcDuration');
+    const durationValue = document.getElementById('durationValue');
+    durationSlider.addEventListener('input', function () {
+        durationValue.textContent = this.value + 'ms';
+    });
+    */
+    // Custom arc creation
+    /*
+    document.getElementById('drawCustomArc').addEventListener('click', () => {
+        const startLat = parseFloat(document.getElementById('startLat').value);
+        const startLon = parseFloat(document.getElementById('startLon').value);
+        const endLat = parseFloat(document.getElementById('endLat').value);
+        const endLon = parseFloat(document.getElementById('endLon').value);
+        const color = parseInt(document.getElementById('arcColor').value);
+        const animType = document.getElementById('arcType').value;
+        const duration = parseInt(document.getElementById('arcDuration').value);
+
+        if (!isNaN(startLat) && !isNaN(startLon) && !isNaN(endLat) && !isNaN(endLon)) {
+            createArc(startLat, startLon, endLat, endLon, {
+                color: color,
+                width: 3,
+                duration: duration,
+                arcHeight: 25,
+                animationType: animType,
+                pulseEffect: true
+            });
+        }
+    });
+    */
+    // Update arc counter periodically
+    /*
+    setInterval(() => {
+        document.getElementById('arcCount').textContent = arcManager.getActiveArcCount();
+    }, 500);
+    */
+
+    // Set initial values
+    const now = new Date();
+    currentAnimatedTime = new Date(now);
+    updateTimeDisplay(now);
+    updateSunAndEarth(now);
+
+    // Manual update button
+    updateButton.addEventListener('click', function () {
+        const dateStr = dateInput.value;
+        const timeStr = timeInput.value;
+
+        if (dateStr && timeStr) {
+            const dateTime = new Date(dateStr + 'T' + timeStr + 'Z');
+            currentAnimatedTime = new Date(dateTime);
+            updateSunAndEarth(dateTime);
+            updateTimeDisplay(dateTime);
+
+            // Stop animation when manually setting time
+            isTimeAnimating = false;
+            startButton.textContent = 'Start';
+        }
+    });
+
+    // Current time button
+    currentTimeButton.addEventListener('click', function () {
+        const now = new Date();
+        const tzOffset = 2; // hours
+        const localTime = new Date(now.getTime() + (tzOffset * 60 * 60 * 1000));
+
+        currentAnimatedTime = new Date(localTime);
+        updateSunAndEarth(localTime);
+        updateTimeDisplay(localTime);
+
+        // Stop animation when setting to current time
+        isTimeAnimating = false;
+        startButton.textContent = 'Start';
+    });
+
+    // Animation start/stop
+    startButton.addEventListener('click', function () {
+        if (!isTimeAnimating) {
+            // Start animation
+            const speed = parseInt(animationSpeedSelect.value);
+            animationSpeed = speed;
+
+            // Get current time from inputs
+            const dateStr = dateInput.value;
+            const timeStr = timeInput.value;
+            if (dateStr && timeStr) {
+                currentAnimatedTime = new Date(dateStr + 'T' + timeStr + 'Z');
+            }
+
+            isTimeAnimating = true;
+            startButton.textContent = 'Running...';
+            startButton.disabled = true;
+            stopButton.disabled = false;
+        }
+    });
+
+    stopButton.addEventListener('click', function () {
+        isTimeAnimating = false;
+        startButton.textContent = 'Start';
+        startButton.disabled = false;
+        stopButton.disabled = true;
+    });
+
+    // Speed change while running
+    animationSpeedSelect.addEventListener('change', function () {
+        animationSpeed = parseInt(this.value);
+    });
+
+    // Initial button states
+    stopButton.disabled = true;
+
+    // REMOVE ALL OTHER TIME UPDATE CODE:
+    // Remove the setInterval calls
+    // Remove updateSunAndEarth(new Date()) from the animate function
+    // Remove the updateSimulatedTime function and its interval
+
+
+    // Opcional: Función para establecer una hora específica
+    function setTimeOfDay(hours, minutes = 0, seconds = 0) {
+        const date = new Date();
+        date.setHours(hours, minutes, seconds);
+        updateSunAndEarth(date);
+    }
+
+    // Opcional: Función para acelerar el tiempo (para demostración)
+    let timeAcceleration = 1; // 1 = tiempo real, 60 = 1 minuto = 1 segundo
+    let simulatedTime = new Date();
+
+    // Descomenta esta línea para ver el tiempo acelerado
+
+    animate();
+
+    // Replace the DOMContentLoaded section with this:
+    // Interactive controls - Execute immediately since DOM is ready
+    let animationId = null;
+
+    // Get DOM elements
+
+    // Set current date and time as default
+
+    dateInput.value = now.toISOString().split('T')[0];
+    timeInput.value = now.toTimeString().split(' ')[0];
+
+    // Update sun position based on input
+    updateButton.addEventListener('click', function () {
+        const dateStr = dateInput.value;
+        const timeStr = timeInput.value;
+
+        if (dateStr && timeStr) {
+            const dateTime = new Date(dateStr + 'T' + timeStr + 'Z'); // UTC time
+            updateSunAndEarth(dateTime);
+            updateInfo(dateTime);
+        }
+    });
+
+    // Set to current time
+    currentTimeButton.addEventListener('click', function () {
+        const now = new Date();
+        dateInput.value = now.toISOString().split('T')[0];
+        timeInput.value = now.toTimeString().split(' ')[0];
+        updateSunAndEarth(now);
+        updateInfo(now);
+    });
+
+    // Animation controls
+    startButton.addEventListener('click', function () {
+        if (animationId) cancelAnimationFrame(animationId);
+
+        const speed = parseInt(animationSpeed.value);
+        let currentTime = new Date(dateInput.value + 'T' + timeInput.value + 'Z');
+
+        function animateTime() {
+            currentTime = new Date(currentTime.getTime() + 1000 * speed);
+            updateSunAndEarth(currentTime);
+            updateInfo(currentTime);
+
+            // Update inputs to show current animated time
+            dateInput.value = currentTime.toISOString().split('T')[0];
+            timeInput.value = currentTime.toISOString().split('T')[1].split('.')[0];
+
+            animationId = requestAnimationFrame(animateTime);
+        }
+
+        animateTime();
+    });
+
+    stopButton.addEventListener('click', function () {
+        if (animationId) {
+            cancelAnimationFrame(animationId);
+            animationId = null;
+        }
+    });
+
+    // Update information display
+    function updateInfo(date) {
+        const sunPos = getSunPosition(date);
+        const coordinatesDiv = document.getElementById('coordinates');
+        coordinatesDiv.textContent = `Sun: (${sunPos.x.toFixed(1)}, ${sunPos.y.toFixed(1)}, ${sunPos.z.toFixed(1)})`;
+        timeDisplay.textContent = `UTC: ${date.toISOString().replace('T', ' ').split('.')[0]}`;
+    }
+
+    // Enhanced demo functions with realistic world connections
+    function demonstrateWorldConnections() {
+        const connections = [
+            // Major transatlantic routes
+            {from: [40.7128, -74.0060], to: [51.5074, -0.1278], color: 0xff4444, type: 'flow'}, // NYC -> London
+            {from: [25.7617, -80.1918], to: [40.4168, -3.7038], color: 0xff6666, type: 'draw'}, // Miami -> Madrid
+
+            // Transpacific routes
+            {from: [34.0522, -118.2437], to: [35.6762, 139.6503], color: 0x44ff44, type: 'flow'}, // LA -> Tokyo
+            {from: [37.7749, -122.4194], to: [1.3521, 103.8198], color: 0x66ff66, type: 'pulse'}, // SF -> Singapore
+
+            // Europe to Asia
+            {from: [50.1109, 8.6821], to: [55.7558, 37.6173], color: 0x4444ff, type: 'draw'}, // Frankfurt -> Moscow
+            {from: [48.8566, 2.3522], to: [39.9042, 116.4074], color: 0x6666ff, type: 'flow'}, // Paris -> Beijing
+
+            // Southern hemisphere
+            {from: [-33.8688, 151.2093], to: [-23.5505, -46.6333], color: 0xffff44, type: 'pulse'}, // Sydney -> São Paulo
+            {from: [-26.2041, 28.0473], to: [19.0760, 72.8777], color: 0xff44ff, type: 'flow'}, // Johannesburg -> Mumbai
+        ];
+
+        connections.forEach((conn, index) => {
+            setTimeout(() => {
+                createArc(conn.from[0], conn.from[1], conn.to[0], conn.to[1], {
+                    color: conn.color,
+                    width: 2 + Math.random() * 2,
+                    duration: 3000 + Math.random() * 2000,
+                    arcHeight: 20 + Math.random() * 15,
+                    animationType: conn.type,
+                    pulseEffect: Math.random() > 0.5
+                });
+            }, index * 300);
+        });
+    }
+
+    function simulateInternetTraffic() {
+        const internetHubs = [
+            {name: "San Francisco", lat: 37.7749, lon: -122.4194, tier: 1},
+            {name: "New York", lat: 40.7128, lon: -74.0060, tier: 1},
+            {name: "London", lat: 51.5074, lon: -0.1278, tier: 1},
+            {name: "Frankfurt", lat: 50.1109, lon: 8.6821, tier: 1},
+            {name: "Tokyo", lat: 35.6762, lon: 139.6503, tier: 1},
+            {name: "Singapore", lat: 1.3521, lon: 103.8198, tier: 1},
+            {name: "Sydney", lat: -33.8688, lon: 151.2093, tier: 2},
+            {name: "Mumbai", lat: 19.0760, lon: 72.8777, tier: 2},
+            {name: "São Paulo", lat: -23.5505, lon: -46.6333, tier: 2},
+            {name: "Dubai", lat: 25.2048, lon: 55.2708, tier: 2}
+        ];
+
+        function createTrafficBurst() {
+            const source = internetHubs[Math.floor(Math.random() * internetHubs.length)];
+            const destinations = internetHubs.filter(hub => hub !== source);
+
+            // Create multiple connections from one hub
+            const connectionCount = Math.floor(Math.random() * 3) + 1;
+
+            for (let i = 0; i < connectionCount; i++) {
+                const dest = destinations[Math.floor(Math.random() * destinations.length)];
+
+                // Tier 1 hubs get thicker, faster connections
+                const width = source.tier === 1 ? 3 + Math.random() * 2 : 1 + Math.random() * 2;
+                const speed = source.tier === 1 ? 1500 + Math.random() * 1000 : 2000 + Math.random() * 1500;
+
+                const colors = source.tier === 1 ?
+                    [0xff4444, 0xff6644, 0xff8844] :
+                    [0x44ff44, 0x4444ff, 0x44ffff];
+
+                createArc(source.lat, source.lon, dest.lat, dest.lon, {
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    width: width,
+                    duration: speed,
+                    arcHeight: 15 + Math.random() * 20,
+                    animationType: 'flow',
+                    pulseEffect: source.tier === 1,
+                    particleCount: source.tier === 1 ? 6 : 4
+                });
+
+                setTimeout(() => {
+                }, i * 100);
+            }
+
+            // Schedule next burst
+            setTimeout(createTrafficBurst, Math.random() * 2000 + 1000);
+        }
+
+        createTrafficBurst();
+    }
+
+    // Function to create arcs between specific regions
+    function createRegionalConnections(region) {
+        const regions = {
+            asia: [
+                {name: "Tokyo", lat: 35.6762, lon: 139.6503},
+                {name: "Seoul", lat: 37.5665, lon: 126.9780},
+                {name: "Beijing", lat: 39.9042, lon: 116.4074},
+                {name: "Shanghai", lat: 31.2304, lon: 121.4737},
+                {name: "Hong Kong", lat: 22.3193, lon: 114.1694},
+                {name: "Singapore", lat: 1.3521, lon: 103.8198},
+                {name: "Mumbai", lat: 19.0760, lon: 72.8777}
+            ],
+            europe: [
+                {name: "London", lat: 51.5074, lon: -0.1278},
+                {name: "Paris", lat: 48.8566, lon: 2.3522},
+                {name: "Frankfurt", lat: 50.1109, lon: 8.6821},
+                {name: "Amsterdam", lat: 52.3676, lon: 4.9041},
+                {name: "Madrid", lat: 40.4168, lon: -3.7038},
+                {name: "Rome", lat: 41.9028, lon: 12.4964},
+                {name: "Stockholm", lat: 59.3293, lon: 18.0686}
+            ],
+            americas: [
+                {name: "New York", lat: 40.7128, lon: -74.0060},
+                {name: "Los Angeles", lat: 34.0522, lon: -118.2437},
+                {name: "Chicago", lat: 41.8781, lon: -87.6298},
+                {name: "Miami", lat: 25.7617, lon: -80.1918},
+                {name: "São Paulo", lat: -23.5505, lon: -46.6333},
+                {name: "Mexico City", lat: 19.4326, lon: -99.1332},
+                {name: "Toronto", lat: 43.6532, lon: -79.3832}
+            ]
+        };
+
+        const cities = regions[region] || [];
+        if (cities.length === 0) return;
+
+        // Create connections between all cities in the region
+        for (let i = 0; i < cities.length; i++) {
+            for (let j = i + 1; j < cities.length; j++) {
+                setTimeout(() => {
+                    createArc(cities[i].lat, cities[i].lon, cities[j].lat, cities[j].lon, {
+                        color: region === 'asia' ? 0xff4444 : region === 'europe' ? 0x44ff44 : 0x4444ff,
+                        width: 2,
+                        duration: 2000 + Math.random() * 1000,
+                        arcHeight: 10 + Math.random() * 10,
+                        animationType: 'flow',
+                        opacity: 0.7
+                    });
+                }, (i * cities.length + j) * 200);
+            }
+        }
+    }
+
+    // Initialize with current time
+    updateSunAndEarth(now);
+    updateInfo(now);
+    var last = 0;
+    function get_flows(){
+    	var exporter = document.getElementById('exporterInput').value;
+        var xmlHttp = new XMLHttpRequest();
+        xmlHttp.open( "GET", "../flows/"+exporter+"/"+last, false ); // false for synchronous request
+        xmlHttp.send( null );
+
+        return JSON.parse(xmlHttp.responseText);
+    }
+
+    function draw_flows(){
+        var flows = get_flows();
+        last = flows.Last;
+        for (var index in flows["Fdb"]){
+            var flow = flows["Fdb"][index];
+            const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff];
+            const animTypes = ['flow', 'draw', 'pulse'];
+
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const animType = animTypes[Math.floor(Math.random() * animTypes.length)];
+            if (flow.Distance > 0){
+                var timeoutRnd = Math.random() * 300;
+                //setTimeout(() => {
+                    createArc(flow.SrcCoord.Latitude, flow.SrcCoord.Longitude, flow.DstCoord.Latitude, flow.DstCoord.Longitude, {
+                    color: color,
+                    width: flow.Octets  / 1000000 + 1,
+                    duration: 30000,
+                    arcHeight: flow.Distance / 1000000 * 10 + 0,
+                    animationType: animTypes[1],
+                    pulseEffect: 0,
+                    particleCount: 0 , //flow.Packets / 1000000 + 1
+                });
+                    //},timeoutRnd);
+
+            debugger;
+            }
+        /*
+        for (var flow_1 in flows){
+            for (var flow_2 in flows[flow_1]) {
+                //console.log(flows[flow_1][flow_2]);
+                var flow = flows[flow_1][flow_2];
+                const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff];
+                const animTypes = ['flow', 'draw', 'pulse'];
+
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const animType = animTypes[Math.floor(Math.random() * animTypes.length)];
+                if (flow.SrcCoord.Latitude != flow.DstCoord.Latitude || flow.SrcCoord.Longitude != flow.DstCoord.Longitude){
+                    createArc(flow.SrcCoord.Latitude, flow.SrcCoord.Longitude, flow.DstCoord.Latitude, flow.DstCoord.Longitude, {
+                        color: color,
+                        width: 5   ,
+                        duration: 5000,
+                        arcHeight: flow.Distance / 1000000 * 15 + 0,
+                        animationType: animTypes[1],
+                        pulseEffect: 0,
+                        particleCount: flow.Packets
+                    });
+                    debugger;
+                }
+            }
+
+        */
+        }
+
+    }
+    draw_flows();
+    var interval = setInterval(() => draw_flows(), 30000);
+</script>
+</body>
+</html>

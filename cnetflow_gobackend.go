@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"strconv"
+	"time"
 
 	_ "github.com/lib/pq" // The underscore is intentional - it's a blank import
 	"github.com/oschwald/maxminddb-golang/v2"
@@ -27,6 +28,12 @@ const (
 	RadiansPerDegree = math.Pi / 180.0
 	//DegreesPerRadian = 180.0 / math.Pi
 )
+
+type Metric struct {
+	Timestamp time.Time `json:"timestamp" db:"timestamp"`
+	OctetsIn  int64     `json:"octets_in" db:"octets_in"`
+	OctetsOut int64     `json:"octets_out" db:"octets_out"`
+}
 
 type Config struct {
 	bind_address     string
@@ -249,6 +256,71 @@ func getFlowsDB(exporter int64, last int64) ([]FlowGEO, int64) {
 	}
 	return FlowsGEOArray, max_last
 }
+
+func getInterfacesMetricsRequest(w http.ResponseWriter, r *http.Request) {
+
+	exporterStr := r.PathValue("exporter")
+	log.Println(exporterStr)
+	interfaceStr := r.PathValue("interface")
+	log.Println(interfaceStr)
+	metrics, err := getInterfacesMetrics(exporterStr, interfaceStr)
+
+	if err != nil {
+		log.Println(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	metrics_json, err := json.Marshal(metrics)
+	fmt.Fprintf(w, string(metrics_json))
+
+}
+
+func getInterfacesMetrics(exporter string, interfac string) ([]Metric, error) {
+	var rows *sql.Rows
+	var err error
+	var metrics []Metric
+
+	rows, err = config.db.Query("select inserted_at,octets_in,octets_out from interface_metrics where exporter = $1 and snmp_index = $2", exporter, interfac)
+	if err != nil {
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println(err.Error())
+		}
+	}(rows)
+	for rows.Next() {
+		//var row Row
+		var metric Metric
+		var ts sql.NullTime
+		var octets_in sql.NullInt64
+		var octets_out sql.NullInt64
+		err := rows.Scan(
+			&ts,
+			&octets_in,
+			&octets_out)
+		if err != nil {
+			log.Println(err.Error())
+			continue
+		}
+		if ts.Valid {
+			metric.Timestamp = ts.Time
+		}
+		if octets_out.Valid {
+			metric.OctetsOut = octets_out.Int64
+		}
+		if octets_in.Valid {
+			metric.OctetsIn = octets_in.Int64
+		}
+		metrics = append(metrics, metric)
+
+	}
+	log.Println(metrics)
+	return metrics, nil
+}
+
 func getInterfacesRequest(w http.ResponseWriter, r *http.Request) {
 
 	exporterStr := r.PathValue("exporter")
@@ -263,10 +335,16 @@ func getInterfacesRequest(w http.ResponseWriter, r *http.Request) {
 
 	for _, interfac := range interfaces {
 		var line = ""
-		line = fmt.Sprintf("<li id=\"%d\">[%d] %s %s %d </li>\n", interfac.ID, interfac.Snmp_if, interfac.Descr, interfac.Alias, interfac.Speed)
+		line = fmt.Sprintf("<li hx-swap=\"innerHTML\" hx-target=\"#chart\" hx-post=\"./api/v1/metrics/%s/%d/tag\" id=\"%d\">[%d] %s %s %s %d </li>\n", interfac.Exporter, interfac.Snmp_if, interfac.ID, interfac.Snmp_if, interfac.Name, interfac.Descr, interfac.Alias, interfac.Speed)
 		fmt.Fprintf(w, line)
 	}
 
+}
+
+func handleQueryRequest(w http.ResponseWriter, r *http.Request) {
+	value := r.PathValue("path")
+	log.Println(value)
+	http.Error(w, "Not implemented", http.StatusNotImplemented)
 }
 
 func getInterfacesList(exporter string) ([]Interface, error) {
@@ -410,7 +488,7 @@ func getExportersRequest(w http.ResponseWriter, r *http.Request) {
 	log.Println(exporters)
 	for _, exporter := range exporters {
 		var line = ""
-		line = fmt.Sprintf("<li id=\"%d\" hx-post=\"./api/v1/interfaces/%d\" hx-target=\"#interfaces\">%s</li>\n", exporter.ID, exporter.ID, exporter.IP_Inet)
+		line = fmt.Sprintf("<li id=\"%d\" hx-post=\"./api/v1/interfaces/%d\" hx-target=\"#interfaces\">%s [%s]</li>\n", exporter.ID, exporter.ID, exporter.Name, exporter.IP_Inet)
 		fmt.Fprintf(w, line)
 	}
 	/*jsonBytes, err := json.Marshal(exporters)
@@ -458,6 +536,7 @@ func getFlowsRequest(w http.ResponseWriter, r *http.Request) {
 }
 func main() {
 	var err error
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	config = Config{}
 	//TIP <p>Press <shortcut actionId="ShowIntentionActions"/> when your caret is at the underlined text
 	// to see how GoLand suggests fixing the warning.</p><p>Alternatively, if available, click the lightbulb to view possible fixes.</p>
@@ -494,12 +573,16 @@ func main() {
 	mux := http.NewServeMux()
 	fileServer := http.FileServer(http.Dir("./static"))
 	//mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {})
+
 	mux.HandleFunc("/api/v1/interfaces", getInterfacesRequest)
+	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}", getInterfacesMetricsRequest)
+	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/tag", renderChartTag)
+	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/png", renderChartPNG)
 	mux.HandleFunc("/api/v1/interfaces/{exporter}", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/exporters/list", getExportersRequest)
 	mux.HandleFunc("/api/v1/flows/{exporter}", getFlowsRequest)
 	mux.HandleFunc("/api/v1/flows/{exporter}/{last}", getFlowsRequest)
-
+	mux.HandleFunc("/api/v1/query/{path...}", handleQueryRequest)
 	mux.Handle("/", http.StripPrefix("", fileServer))
 	err = http.ListenAndServe(config.bind_address, mux)
 	if err != nil {

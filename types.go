@@ -11,6 +11,7 @@ type Interface struct {
 	ID       uint64 `json:"id" db:"id"`
 	Exporter string `json:"exporter" db:"exporter"`
 	Snmp_if  uint64 `json:"snmp_if" db:"snmp_if"`
+	Name     string `json:"name" db:"name"`
 	Descr    string `json:"description" db:"description"`
 	Alias    string `json:"alias" db:"alias"`
 	Speed    int64  `json:"speed" db:"speed"`

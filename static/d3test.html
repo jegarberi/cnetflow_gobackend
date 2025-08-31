@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Simple D3 Bar Chart (from URL)</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .bar { fill: steelblue; }
+        .bar:hover { fill: #3a77c9; }
+        .axis path, .axis line { stroke: #888; }
+        .error { color: #b00020; }
+    </style>
+</head>
+<body>
+<h1>Simple D3 Bar Chart (from URL)</h1>
+<div id="status">Loading…</div>
+<svg id="chart" width="700" height="400"></svg>
+
+<script src="./d3.js"></script>
+<script>
+    const ENDPOINT = "./api/v1/metrics/1/10"; // <-- Replace with your endpoint
+
+    // Accessors: adjust these if your API uses different field names.
+    const nameAccessor = d => d.name;          // e.g., d.label
+    const valueAccessor = d => +d.value;       // ensure numeric (e.g., +d.count)
+
+    const svg = d3.select("#chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const margin = { top: 20, right: 20, bottom: 40, left: 40 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const g = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const x = d3.scaleBand().padding(0.2);
+    const y = d3.scaleLinear();
+
+    const xAxisG = g.append("g")
+        .attr("class", "axis axis--x")
+        .attr("transform", `translate(0,${innerHeight})`);
+
+    const yAxisG = g.append("g")
+        .attr("class", "axis axis--y");
+
+    function render(data) {
+        // Basic data validation
+        debugger;
+        if (!Array.isArray(data)) {
+            throw new Error("Data is not an array.");
+        }
+
+        // Domains and ranges
+        x.domain(data.map(nameAccessor)).range([0, innerWidth]);
+        y.domain([0, d3.max(data, valueAccessor) || 0]).nice().range([innerHeight, 0]);
+
+        // Axes
+        xAxisG.call(d3.axisBottom(x));
+        yAxisG.call(d3.axisLeft(y).ticks(6));
+
+        // Bars
+        const bars = g.selectAll(".bar")
+            .data(data, d => nameAccessor(d));
+
+        bars.join("rect")
+            .attr("class", "bar")
+            .attr("x", d => x(nameAccessor(d)))
+            .attr("y", d => y(valueAccessor(d)))
+            .attr("width", x.bandwidth())
+            .attr("height", d => innerHeight - y(valueAccessor(d)));
+
+        // Value labels
+        const labels = g.selectAll(".label")
+            .data(data, d => nameAccessor(d));
+
+        labels.join("text")
+            .attr("class", "label")
+            .attr("x", d => x(nameAccessor(d)) + x.bandwidth() / 2)
+            .attr("y", d => y(valueAccessor(d)) - 6)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "12px")
+            .text(d => valueAccessor(d));
+    }
+
+    async function loadAndRender() {
+        const status = document.getElementById("status");
+        try {
+            status.textContent = "Loading…";
+            const data = await d3.json(ENDPOINT);
+            render(data);
+            status.textContent = "";
+        } catch (err) {
+            console.error(err);
+            status.className = "error";
+            status.textContent = "Failed to load data. See console for details.";
+        }
+    }
+
+    loadAndRender();
+</script>
+</body>
+</html>

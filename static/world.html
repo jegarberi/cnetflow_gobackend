@@ -24,7 +24,8 @@
 </head>
 <body>
 <!-- Add these controls in the body -->
-<div style="position: absolute; top: 10px; left: 10px; z-index: 100; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 5px; color: white; font-family: Arial, sans-serif;">
+
+<div style="visibility: hidden; position: absolute; top: 10px; left: 10px; z-index: 100; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 5px; color: white; font-family: Arial, sans-serif;">
     <h3 style="margin-top: 0;">Solar Position Control</h3>
 
     <div style="margin-bottom: 10px;">
@@ -154,16 +155,16 @@
     scene.add(globe);
 
     // Luz direccional como el Sol
-    let sun = new THREE.DirectionalLight(0xffffff, 1.5);
-    scene.add(sun);
-    const light = new THREE.AmbientLight(0x404040); // soft white light
-    scene.add(light);
-    const sunMesh = new THREE.Mesh(
+    //let sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    //scene.add(sun);
+    //const light = new THREE.AmbientLight(0x404040); // soft white light
+    //scene.add(light);
+    /*const sunMesh = new THREE.Mesh(
         new THREE.SphereGeometry(3, 16, 16),
         new THREE.MeshBasicMaterial({color: 0xffff66})
     );
     scene.add(sunMesh);
-
+    */
     // Add these arc-related functions after your existing Three.js setup
 
     // Function to convert geographic coordinates to 3D position on the globe
@@ -210,10 +211,10 @@
         // Calculate the lift-off height (distance from globe surface)
         const heightMultiplier = Math.min(distance / 100, 1.5);
         //const peakHeight = globeRadius + arcHeight + (heightMultiplier * 30);
-        const peakHeight = 60;
+        const peakHeight = 55;
         // Calculate lift-off and landing points (20% of the way from start/end)
-        const liftOffPoint = new THREE.Vector3().lerpVectors(startPos, endPos, 0.2);
-        const landingPoint = new THREE.Vector3().lerpVectors(startPos, endPos, 0.8);
+        const liftOffPoint = new THREE.Vector3().lerpVectors(startPos, endPos, 0.01);
+        const landingPoint = new THREE.Vector3().lerpVectors(startPos, endPos, 0.99);
 
         // Normalize and scale the lift-off and landing points to peak height
         liftOffPoint.normalize().multiplyScalar(peakHeight);
@@ -308,7 +309,6 @@
             // Create material with transparency
             const material = new THREE.LineBasicMaterial({
                 color: this.color,
-                linewidth2: this.width,
                 linewidth: 5,
                 transparent: true,
                 opacity: this.opacity
@@ -319,7 +319,7 @@
             this.arcGroup.add(this.arcLine);
 
             // Create animated particles along the arc
-            this.createParticles();
+            //this.createParticles();
 
             // Initially hide the arc for draw animation
             if (this.animationType === 'draw') {
@@ -371,7 +371,7 @@
             }
 
             // Animate particles
-            this.updateParticles();
+            //this.updateParticles();
 
             // Check if animation is complete
             if (this.currentProgress >= 1) {
@@ -380,11 +380,11 @@
                     const alpha = 1 - fadeProgress;
 
                     this.arcLine.material.opacity = this.opacity * alpha;
-                    this.particles.forEach(particle => {
+                    /*this.particles.forEach(particle => {
                         if (particle.mesh.visible) {
                             particle.mesh.material.opacity *= alpha;
                         }
-                    });
+                    });*/
 
                     if (fadeProgress >= 1) {
                         this.isAnimating = false;
@@ -458,10 +458,10 @@
             this.arcLine.geometry.dispose();
             this.arcLine.material.dispose();
 
-            this.particles.forEach(particle => {
+            /*this.particles.forEach(particle => {
                 particle.mesh.geometry.dispose();
                 particle.mesh.material.dispose();
-            });
+            });*/
         }
     }
 
@@ -598,7 +598,7 @@
 
     // Update your animate function to include arc updates
 
-    function getSunPosition(date) {
+    /*function getSunPosition(date) {
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
         const day = date.getDate();
@@ -723,6 +723,8 @@
         const sunPath = new THREE.Line(geometry, material);
         scene.add(sunPath);
     }
+    */
+
     // Calculate Earth's rotation for the given date/time
     function getEarthRotation(date) {
         const hours = date.getUTCHours();
@@ -740,12 +742,12 @@
     // Enhanced function to update sun and Earth for specific date/time
     function updateSunAndEarth(date = new Date()) {
         // Calculate accurate sun position
-        const sunPos = getSunPosition(date);
-        sun.position.copy(sunPos);
-        sunMesh.position.copy(sunPos);
+        //const sunPos = getSunPosition(date);
+        //sun.position.copy(sunPos);
+        //sunMesh.position.copy(sunPos);
 
         // Point the directional light towards Earth's center
-        sun.target.position.set(0, 0, 0);
+        //sun.target.position.set(0, 0, 0);
 
         // Rotate Earth to match the time
         const earthRotation = getEarthRotation(date);
@@ -753,11 +755,11 @@
 
         // Add subtle ambient light for realism (only once)
         if (!scene.getObjectByName('ambientLight')) {
-            const ambientLight = new THREE.AmbientLight(0x404040, 0.2);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
             ambientLight.name = 'ambientLight';
             scene.add(ambientLight);
         }
-        debugSunPath();
+        //debugSunPath();
     }
 
     // Function to set specific date and time
@@ -777,7 +779,7 @@
             updateSunAndEarth(currentTime);
 
             // Continue animation
-            requestAnimationFrame(animate);
+            //requestAnimationFrame(animate);
         }
 
         animate();
@@ -836,8 +838,8 @@
         timeInput.value = date.toISOString().split('T')[1].split('.')[0];
 
         // Update info display
-        const sunPos = getSunPosition(date);
-        coordinatesDiv.textContent = `Sun: (${sunPos.x.toFixed(1)}, ${sunPos.y.toFixed(1)}, ${sunPos.z.toFixed(1)})`;
+        //const sunPos = getSunPosition(date);
+        //coordinatesDiv.textContent = `Sun: (${sunPos.x.toFixed(1)}, ${sunPos.y.toFixed(1)}, ${sunPos.z.toFixed(1)})`;
         timeDisplay.textContent = `UTC: ${date.toISOString().replace('T', ' ').split('.')[0]}`;
     }
 
@@ -1059,9 +1061,9 @@
 
     // Update information display
     function updateInfo(date) {
-        const sunPos = getSunPosition(date);
+        //const sunPos = getSunPosition(date);
         const coordinatesDiv = document.getElementById('coordinates');
-        coordinatesDiv.textContent = `Sun: (${sunPos.x.toFixed(1)}, ${sunPos.y.toFixed(1)}, ${sunPos.z.toFixed(1)})`;
+        //coordinatesDiv.textContent = `Sun: (${sunPos.x.toFixed(1)}, ${sunPos.y.toFixed(1)}, ${sunPos.z.toFixed(1)})`;
         timeDisplay.textContent = `UTC: ${date.toISOString().replace('T', ' ').split('.')[0]}`;
     }
 
@@ -1211,7 +1213,7 @@
     function get_flows(){
     	var exporter = document.getElementById('exporterInput').value;
         var xmlHttp = new XMLHttpRequest();
-        xmlHttp.open( "GET", "../flows/"+exporter+"/"+last, false ); // false for synchronous request
+        xmlHttp.open( "GET", "./api/v1/flows/"+exporter+"/"+last, false ); // false for synchronous request
         xmlHttp.send( null );
 
         return JSON.parse(xmlHttp.responseText);
@@ -1233,7 +1235,7 @@
                     createArc(flow.SrcCoord.Latitude, flow.SrcCoord.Longitude, flow.DstCoord.Latitude, flow.DstCoord.Longitude, {
                     color: color,
                     width: flow.Octets  / 1000000 + 1,
-                    duration: 30000,
+                    duration: 5000,
                     arcHeight: flow.Distance / 1000000 * 10 + 0,
                     animationType: animTypes[1],
                     pulseEffect: 0,
@@ -1272,7 +1274,7 @@
 
     }
     draw_flows();
-    var interval = setInterval(() => draw_flows(), 30000);
+    var interval = setInterval(() => draw_flows(), 6000);
 </script>
 </body>
 </html>

@@ -20,30 +20,30 @@ func renderChartTag(w http.ResponseWriter, r *http.Request) {
 	log.Println(exporterStr)
 	interfaceStr := r.PathValue("interface")
 	log.Println(interfaceStr)
-	body := []byte(`<img hx-trigger="every 3s" hx-get="./api/v1/metrics/` + exporterStr + `/` + interfaceStr + `/tag" src="./api/v1/metrics/` + exporterStr + `/` + interfaceStr + `/png" /></img>`)
+	body := []byte(`<img src="./api/v1/metrics/` + exporterStr + `/` + interfaceStr + `/png" /></img>`)
 	w.Write(body)
 }
 
 func FormatIEC(v interface{}) string {
-	bytes, _ := v.(float64)
-	if bytes == 0 {
-		return "0 B"
+	bits, _ := v.(float64)
+	if bits == 0 {
+		return "0 b/s"
 	}
 
-	neg := bytes < 0
+	neg := bits < 0
 	if neg {
-		bytes = -bytes
+		bits = -bits
 	}
 
-	if bytes < 1024 {
+	if bits < 1024 {
 		if neg {
-			return fmt.Sprintf("-%d B/s", bytes)
+			return fmt.Sprintf("-%d b/s", bits)
 		}
-		return fmt.Sprintf("%d B/s", bytes)
+		return fmt.Sprintf("%d b/s", bits)
 	}
 
-	units := []string{"KiB", "MiB", "GiB", "TiB", "PiB", "EiB"}
-	val := float64(bytes)
+	units := []string{"Kib", "Mib", "Gib", "Tib", "Pib", "Eib"}
+	val := float64(bits)
 	idx := 0
 	for val >= 1024 && idx < len(units)-1 {
 		val /= 1024
@@ -129,12 +129,35 @@ func ParseIEC(s string) (int64, error) {
 }
 
 func renderChartPNG(w http.ResponseWriter, r *http.Request) {
-
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	exporterStr := r.PathValue("exporter")
 	log.Println(exporterStr)
 	interfaceStr := r.PathValue("interface")
 	log.Println(interfaceStr)
-	metrics, err := getInterfacesMetrics(exporterStr, interfaceStr)
+	var start time.Time
+	var end time.Time
+	startStr := r.PathValue("start")
+	endStr := r.PathValue("end")
+	startEpoch, _ := strconv.ParseInt(startStr, 10, 64)
+	endEpoch, _ := strconv.ParseInt(endStr, 10, 64)
+	log.Println("start: ", startStr)
+	log.Println("end : ", endStr)
+	if startStr != "" {
+		start = time.Unix(startEpoch, 0)
+	}
+	if endStr != "" {
+		end = time.Unix(endEpoch, 0)
+	}
+	if start.IsZero() {
+		start = time.Now().Add(-24 * time.Hour)
+	}
+	if end.IsZero() {
+		end = time.Now()
+	}
+	log.Println("start: ", start)
+	log.Println("end : ", end)
+	metrics, err := getInterfacesMetrics(exporterStr, interfaceStr, start, end)
 
 	if err != nil {
 		log.Println(err.Error())
@@ -170,8 +193,16 @@ func renderChartPNG(w http.ResponseWriter, r *http.Request) {
 		if delta_out == new_out {
 			delta_out = 0
 		}
-		delta_in = delta_in / delta_ts.Seconds() / 8
-		delta_out = delta_out / delta_ts.Seconds() / 8
+		if delta_out < 0 {
+			delta_out = 0
+		}
+		if delta_in < 0 {
+			delta_in = 0
+		}
+
+		log.Println("Seconds: ", delta_ts.Seconds())
+		delta_in = (delta_in / delta_ts.Seconds()) * 8
+		delta_out = (delta_out / delta_ts.Seconds()) * 8
 		x_values = append(x_values, metric.Timestamp)
 		y_values_in = append(y_values_in, delta_in)
 		y_values_out = append(y_values_out, delta_out)
@@ -179,6 +210,7 @@ func renderChartPNG(w http.ResponseWriter, r *http.Request) {
 		log.Println(delta_out)
 	}
 	graph := chart.Chart{
+		Title:  "Traffic",
 		Width:  600,
 		Height: 200,
 		XAxis: chart.XAxis{

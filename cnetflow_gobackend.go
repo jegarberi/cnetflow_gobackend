@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -263,7 +264,23 @@ func getInterfacesMetricsRequest(w http.ResponseWriter, r *http.Request) {
 	log.Println(exporterStr)
 	interfaceStr := r.PathValue("interface")
 	log.Println(interfaceStr)
-	metrics, err := getInterfacesMetrics(exporterStr, interfaceStr)
+	var start time.Time
+	var end time.Time
+	startStr := r.PathValue("start")
+	endStr := r.PathValue("end")
+	if startStr != "" {
+		start, _ = time.Parse(time.RFC3339, startStr)
+	}
+	if endStr != "" {
+		end, _ = time.Parse(time.RFC3339, endStr)
+	}
+	if start.IsZero() {
+		start = time.Now().Add(-24 * time.Hour)
+	}
+	if end.IsZero() {
+		end = time.Now()
+	}
+	metrics, err := getInterfacesMetrics(exporterStr, interfaceStr, start, end)
 
 	if err != nil {
 		log.Println(err.Error())
@@ -276,12 +293,16 @@ func getInterfacesMetricsRequest(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func getInterfacesMetrics(exporter string, interfac string) ([]Metric, error) {
+func getInterfacesMetrics(exporter string, interfac string, start time.Time, end time.Time) ([]Metric, error) {
 	var rows *sql.Rows
 	var err error
 	var metrics []Metric
+	log.Println("start: ", start)
+	log.Println("end : ", end)
+	log.Println("start: ", start.UTC().String())
+	log.Println("end : ", end.UTC().String())
 
-	rows, err = config.db.Query("select inserted_at,octets_in,octets_out from interface_metrics where exporter = $1 and snmp_index = $2", exporter, interfac)
+	rows, err = config.db.Query("select inserted_at,octets_in,octets_out from interface_metrics where exporter = $1 and snmp_index = $2 and (inserted_at >= $3 and inserted_at <= $4 )", exporter, interfac, start.UTC(), end.UTC())
 	if err != nil {
 		return nil, err
 	}
@@ -318,6 +339,11 @@ func getInterfacesMetrics(exporter string, interfac string) ([]Metric, error) {
 
 	}
 	log.Println(metrics)
+	sort.Slice(metrics, func(i, j int) bool {
+		//return times[i].Before(times[j]) // ascending
+		return metrics[i].Timestamp.Before(metrics[j].Timestamp)
+	})
+
 	return metrics, nil
 }
 
@@ -577,7 +603,9 @@ func main() {
 	mux.HandleFunc("/api/v1/interfaces", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}", getInterfacesMetricsRequest)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/tag", renderChartTag)
+	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/{start}/{end}/png", renderChartPNG)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/png", renderChartPNG)
+
 	mux.HandleFunc("/api/v1/interfaces/{exporter}", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/exporters/list", getExportersRequest)
 	mux.HandleFunc("/api/v1/flows/{exporter}", getFlowsRequest)

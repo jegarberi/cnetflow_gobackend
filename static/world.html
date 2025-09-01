@@ -144,7 +144,7 @@
     controls.enableDamping = true;
 
     const textureLoader = new THREE.TextureLoader();
-    const earthColor = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
+    const earthColor = textureLoader.load('./earth-blue-marble.jpg');
 
     let globe = new THREE.Mesh(
         new THREE.SphereGeometry(50, 64, 64),

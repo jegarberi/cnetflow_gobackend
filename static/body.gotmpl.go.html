@@ -1,0 +1,40 @@
+
+<div class="main-content">
+    <h1>Welcome to Our Website</h1>
+    <p>This is the main content area. The left column contains a navigation list that you can customize with your own links and content.</p>
+    <p>You can add more content here as needed for your website.</p>
+    <!-- HTML5 date picker -->
+    <label for="end-datetime">Start date</label>
+    <input
+            type="datetime-local"
+            id="start-datetime"
+            name="start-date"
+            value="{{.StartInputValue}}"
+            step="300"
+    />
+    <label for="end-datetime">End date</label>
+    <input
+            type="datetime-local"
+            id="end-datetime"
+            name="end-datetime"
+            value="{{.EndInputValue}}"
+            step="300"
+    />
+
+    <div id="chart_snmptraffic">
+        <img width="600px" height="150px" src="{{.TrafficImg}}"/>
+    </div>
+    <div id="chart_flowsrcinput">
+        <img width="300px" height="300px" src="{{.InputSrcPie}}"/>
+    </div>
+    <div id="chart_flowsrcoutput">
+        <img width="300px" height="300px" src="{{.OutputSrcPie}}"/>
+    </div>
+    <div id="chart_flowdstinput">
+        <img width="300px" height="300px" src="{{.InputDstPie}}"/>
+    </div>
+    <div id="chart_flowdstoutput">
+        <img width="300px" height="300px" src="{{.OutputDstPie}}"/>
+    </div>
+    <!--<iframe src="./world.html" style="width: 200px; height: 200px; border: none;"></iframe>-->
+</div>

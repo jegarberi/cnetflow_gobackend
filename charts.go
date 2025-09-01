@@ -1,11 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -20,14 +22,28 @@ func renderChartTag(w http.ResponseWriter, r *http.Request) {
 	log.Println(exporterStr)
 	interfaceStr := r.PathValue("interface")
 	log.Println(interfaceStr)
-	body := []byte(`<img src="./api/v1/metrics/` + exporterStr + `/` + interfaceStr + `/png" /></img>`)
+	start := time.Now().Add(-1 * time.Hour)
+	end := time.Now()
+	startStr := fmt.Sprintf("%d", start.Unix())
+	endStr := fmt.Sprintf("%d", end.Unix())
+	body := []byte(`<img src="./api/v1/metrics/` + exporterStr + `/` + interfaceStr + `/` + startStr + `/` + endStr + `/png" /></img>`)
 	w.Write(body)
 }
 
 func FormatIEC(v interface{}) string {
-	bits, _ := v.(float64)
+	var ret string
+	var bits float64
+	switch v.(type) {
+	case int64:
+		bits = float64(v.(int64))
+	case float64:
+		bits = v.(float64)
+	}
+
 	if bits == 0 {
-		return "0 b/s"
+		ret = "0 b/s"
+		log.Println(ret)
+		return ret
 	}
 
 	neg := bits < 0
@@ -37,17 +53,24 @@ func FormatIEC(v interface{}) string {
 
 	if bits < 1024 {
 		if neg {
-			return fmt.Sprintf("-%d b/s", bits)
+			ret = fmt.Sprintf("-%.*f b/s", 1, bits)
+			log.Println(ret)
+			return ret
 		}
-		return fmt.Sprintf("%d b/s", bits)
+		ret = fmt.Sprintf("%.*f b/s", 1, bits)
+		log.Println(ret)
+		return ret
 	}
 
-	units := []string{"Kib", "Mib", "Gib", "Tib", "Pib", "Eib"}
+	units := []string{"b", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib"}
 	val := float64(bits)
 	idx := 0
 	for val >= 1024 && idx < len(units)-1 {
 		val /= 1024
 		idx++
+		if idx > 1 {
+			log.Println("idx > 1")
+		}
 	}
 
 	prec := 1
@@ -57,9 +80,13 @@ func FormatIEC(v interface{}) string {
 
 	num := fmt.Sprintf("%.*f", prec, val)
 	if neg {
-		return fmt.Sprintf("-%s %s/s", num, units[idx])
+		ret = fmt.Sprintf("-%s %s/s", num, units[idx])
+		log.Println(ret)
+		return ret
 	}
-	return fmt.Sprintf("%s %s/s", num, units[idx])
+	ret = fmt.Sprintf("%s %s/s", num, units[idx])
+	log.Println(ret)
+	return ret
 }
 
 // ParseIEC parses a human-readable IEC size back into bytes.
@@ -128,9 +155,8 @@ func ParseIEC(s string) (int64, error) {
 	return int64(math.Round(val)), nil
 }
 
-func renderChartPNG(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+func getSNMPMetricsForChart(r *http.Request) (metrics []Metric, err error) {
+
 	exporterStr := r.PathValue("exporter")
 	log.Println(exporterStr)
 	interfaceStr := r.PathValue("interface")
@@ -157,8 +183,14 @@ func renderChartPNG(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Println("start: ", start)
 	log.Println("end : ", end)
-	metrics, err := getInterfacesMetrics(exporterStr, interfaceStr, start, end)
+	metrics, err = getInterfacesMetrics(exporterStr, interfaceStr, start, end)
+	return metrics, err
+}
 
+func renderTimeseriesChartPNG(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	metrics, err := getSNMPMetricsForChart(r)
 	if err != nil {
 		log.Println(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -277,5 +309,201 @@ func renderChartPNG(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	graph.Render(chart.PNG, w)
+
+}
+
+type FlowData struct {
+	Timestamp    time.Time
+	SrcAddr      string
+	DstAddr      string
+	SrcPort      int64
+	DstPort      int64
+	SrcAs        int64
+	DstAs        int64
+	Input        int64
+	Output       int64
+	TotalPackets int64
+	TotalOctets  int64
+}
+
+func getFlowMetricsForChart(r *http.Request) ([]FlowData, error) {
+	var input_or_output string = r.PathValue("direction")
+	if input_or_output == "" {
+		input_or_output = "input"
+	}
+	exporterStr := r.PathValue("exporter")
+	log.Println(exporterStr)
+	interfaceStr := r.PathValue("interface")
+	log.Println(interfaceStr)
+	var start time.Time
+	var end time.Time
+	startStr := r.PathValue("start")
+	endStr := r.PathValue("end")
+	startEpoch, _ := strconv.ParseInt(startStr, 10, 64)
+	endEpoch, _ := strconv.ParseInt(endStr, 10, 64)
+	log.Println("start: ", startStr)
+	log.Println("end : ", endStr)
+	if startStr != "" {
+		start = time.Unix(startEpoch, 0)
+	}
+	if endStr != "" {
+		end = time.Unix(endEpoch, 0)
+	}
+	if start.IsZero() {
+		start = time.Now().Add(-24 * time.Hour)
+	}
+	if end.IsZero() {
+		end = time.Now()
+	}
+	log.Println("start: ", start)
+	log.Println("end : ", end)
+	var flows []FlowData
+	exporters, err := getExporterList()
+	if err != nil {
+		return nil, err
+	}
+	var exporterInet string
+	for _, exporter := range exporters {
+		log.Println(exporter.ID)
+		log.Println(exporterStr)
+		log.Println(exporter.IP_Inet)
+		if fmt.Sprintf("%d", exporter.ID) == exporterStr {
+			log.Println("Found")
+			exporterInet = exporter.IP_Inet
+		}
+	}
+	if exporterInet == "" {
+		return nil, errors.New("Exporter not found")
+	}
+	log.Println(exporterInet)
+	rows, err := config.db.Query("select bucket_5min,exporter,srcaddr,dstaddr,srcport,dstport,src_as,dst_as,total_packets,total_octets,input,output from flows_v5_agg_5min where exporter=$1 and "+
+		input_or_output+
+		" = $2 and bucket_5min >= $3 and bucket_5min <= $4 "+
+		" UNION "+
+		"select bucket_5min,exporter,srcaddr,dstaddr,srcport,dstport,src_as,dst_as,total_packets,total_octets,input,output from flows_v9_agg_5min where exporter=$1 and "+
+		input_or_output+" = $2 and bucket_5min >= $3 and bucket_5min <= $4",
+		exporterInet, interfaceStr, start, end)
+	if err != nil {
+		return nil, err
+	}
+	var sqltimestamp sql.NullTime
+	var sqlexporter sql.NullString
+	var sqlsrcaddr sql.NullString
+	var sqldstaddr sql.NullString
+	var sqlsrcport sql.NullInt64
+	var sqldstport sql.NullInt64
+	var sqlsrcas sql.NullInt64
+	var sqldstas sql.NullInt64
+	var sqlinput sql.NullInt64
+	var sqloutput sql.NullInt64
+	var sqloctets sql.NullInt64
+	var sqlpackets sql.NullInt64
+	for rows.Next() {
+		var flow FlowData
+		err := rows.Scan(&sqltimestamp, &sqlexporter, &sqlsrcaddr, &sqldstaddr, &sqlsrcport, &sqldstport, &sqlsrcas, &sqldstas, &sqlpackets, &sqloctets, &sqlinput, &sqloutput)
+		if err != nil {
+			return nil, err
+		}
+		flow.Timestamp = sqltimestamp.Time
+		flow.SrcAddr = sqlsrcaddr.String
+		flow.DstAddr = sqldstaddr.String
+		flow.SrcPort = sqlsrcport.Int64
+		flow.DstPort = sqldstport.Int64
+		flow.SrcAs = sqlsrcas.Int64
+		flow.DstAs = sqldstas.Int64
+		flow.Input = sqlinput.Int64
+		flow.Output = sqloutput.Int64
+		flow.TotalPackets = sqlpackets.Int64
+		flow.TotalOctets = sqloctets.Int64
+		log.Println(flow)
+		flows = append(flows, flow)
+
+	}
+	return flows, nil
+}
+
+func renderPieChartSourcePNG(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	metrics, err := getFlowMetricsForChart(r)
+	octets := make(map[string]int64)
+	octets_with_totals := make(map[string]int64)
+	src_or_dst := r.PathValue("src_or_dst")
+	direction := r.PathValue("direction")
+	interfac := r.PathValue("interface")
+
+	if src_or_dst == "" {
+		src_or_dst = "src"
+	}
+	if src_or_dst == "src" {
+		for _, metric := range metrics {
+			if _, ok := octets[metric.SrcAddr]; !ok {
+				octets[metric.SrcAddr] = metric.TotalOctets
+			}
+			octets[metric.SrcAddr] += metric.TotalOctets
+		}
+	} else if src_or_dst == "dst" {
+		for _, metric := range metrics {
+			if _, ok := octets[metric.DstAddr]; !ok {
+				octets[metric.DstAddr] = metric.TotalOctets
+			}
+			octets[metric.DstAddr] += metric.TotalOctets
+		}
+	}
+	sort.Slice(metrics, func(i, j int) bool {
+		return metrics[i].TotalOctets > metrics[j].TotalOctets
+	})
+	for addr, metric := range octets {
+		key := fmt.Sprintf("%s  %s", addr, FormatIEC(metric))
+		if _, ok := octets_with_totals[key]; !ok {
+			octets_with_totals[key] = metric
+		}
+		octets_with_totals[key] += metric
+	}
+	if err != nil {
+		log.Println(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var values []chart.Value
+	for addr, totaloctets := range octets_with_totals {
+		value := chart.Value{
+			Style: chart.Style{
+				FontSize: 10,
+			},
+			Label: addr,
+			Value: float64(totaloctets),
+		}
+		values = append(values, value)
+	}
+	var title = ""
+	if src_or_dst == "src" {
+		title = fmt.Sprintf("Source Address %s on interface %s", direction, interfac)
+	} else if src_or_dst == "dst" {
+		title = fmt.Sprintf("Destination Address %s on interface %s", direction, interfac)
+	}
+	log.Println(values)
+
+	graph := chart.PieChart{
+		Title: title,
+		TitleStyle: chart.Style{
+			FontSize: 10,
+		},
+		ColorPalette: nil,
+		Width:        1080,
+		Height:       1080,
+		DPI:          300,
+		Background:   chart.Style{},
+		Canvas:       chart.Style{},
+		SliceStyle:   chart.Style{},
+		Font:         nil,
+		Values:       values,
+		Elements:     nil,
+	}
+	//log.Println(values)
+	err = graph.Render(chart.PNG, w)
+	if err != nil {
+		return
+	}
 
 }

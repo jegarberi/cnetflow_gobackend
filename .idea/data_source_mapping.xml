@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourcePerFileMappings">
+    <file url="file://$PROJECT_DIR$/charts.go" value="e4b8e436-2abc-4056-a032-aae4bd0ae4bf" />
     <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/e4b8e436-2abc-4056-a032-aae4bd0ae4bf/console_1.sql" value="e4b8e436-2abc-4056-a032-aae4bd0ae4bf" />
   </component>
 </project>

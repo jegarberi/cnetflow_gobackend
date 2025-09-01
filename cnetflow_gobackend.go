@@ -19,36 +19,6 @@ import (
 	"github.com/oschwald/maxminddb-golang/v2"
 )
 
-const (
-	// Earth's radius in various units
-	EarthRadiusKM = 6371.0088
-	//EarthRadiusMiles  = 3958.7613
-	//EarthRadiusMeters = 6371008.8
-
-	// Conversion factors
-	RadiansPerDegree = math.Pi / 180.0
-	//DegreesPerRadian = 180.0 / math.Pi
-)
-
-type Metric struct {
-	Timestamp time.Time `json:"timestamp" db:"timestamp"`
-	OctetsIn  int64     `json:"octets_in" db:"octets_in"`
-	OctetsOut int64     `json:"octets_out" db:"octets_out"`
-}
-
-type Config struct {
-	bind_address     string
-	conn_string      string
-	maxmind_database string
-	db               *sql.DB
-	mmdb             *maxminddb.Reader
-}
-
-type Coordinates struct {
-	Latitude  float64
-	Longitude float64
-}
-
 func (p Coordinates) Haversine(p2 Coordinates) float64 {
 	lat1 := p.Latitude * RadiansPerDegree
 	lon1 := p.Longitude * RadiansPerDegree
@@ -70,43 +40,6 @@ func (p Coordinates) Haversine(p2 Coordinates) float64 {
 // HaversineMeters returns the distance in meters
 func (p Coordinates) HaversineMeters(p2 Coordinates) float64 {
 	return p.Haversine(p2) * 1000
-}
-
-type FlowGEO struct {
-	SrcAddr  net.IP
-	DstAddr  net.IP
-	SrcCoord Coordinates
-	DstCoord Coordinates
-	Distance float64
-	Octets   int64
-	Packets  int64
-}
-
-type ReturnStruct struct {
-	Fdb  []FlowGEO
-	Last int64
-}
-
-type FlowDB struct {
-	ID       uint64 `json:"id" db:"id"`
-	SrcAddr  int64  `json:"srcaddr" db:"srcaddr"`
-	DstAddr  int64  `json:"dstaddr" db:"dstaddr"`
-	Input    int64  `json:"input" db:"input"`
-	Output   int64  `json:"output" db:"output"`
-	DPkts    int64  `json:"dpkts" db:"dpkts"`
-	DOctets  int64  `json:"doctets" db:"doctets"`
-	SrcPort  int64  `json:"srcport" db:"srcport"`
-	DstPort  int64  `json:"dstport" db:"dstport"`
-	TCPFlags string `json:"tcp_flags" db:"tcp_flags"`
-	Protocol string `json:"prot" db:"prot"`
-	TOS      string `json:"tos" db:"tos"`
-	SrcAS    int64  `json:"src_as" db:"src_as"`
-	DstAS    int64  `json:"dst_as" db:"dst_as"`
-	SrcMask  string `json:"src_mask" db:"src_mask"`
-	DstMask  string `json:"dst_mask" db:"dst_mask"`
-	Exporter int64  `json:"exporter" db:"exporter"`
-	First    int64  `json:"first" db:"first"`
-	Last     int64  `json:"last" db:"last"`
 }
 
 var config Config
@@ -352,7 +285,9 @@ func getInterfacesRequest(w http.ResponseWriter, r *http.Request) {
 	exporterStr := r.PathValue("exporter")
 	log.Println(exporterStr)
 	interfaces, err := getInterfacesList(exporterStr)
-
+	sort.Slice(interfaces, func(i, j int) bool {
+		return interfaces[i].Snmp_if < interfaces[j].Snmp_if
+	})
 	if err != nil {
 		log.Println(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -361,8 +296,10 @@ func getInterfacesRequest(w http.ResponseWriter, r *http.Request) {
 
 	for _, interfac := range interfaces {
 		var line = ""
-		line = fmt.Sprintf("<li hx-swap=\"innerHTML\" hx-target=\"#chart\" hx-post=\"./api/v1/metrics/%s/%d/tag\" id=\"%d\">[%d] %s %s %s %d </li>\n", interfac.Exporter, interfac.Snmp_if, interfac.ID, interfac.Snmp_if, interfac.Name, interfac.Descr, interfac.Alias, interfac.Speed)
+		//line = fmt.Sprintf("<li hx-swap=\"innerHTML\" hx-target=\"#chart\" hx-post=\"./api/v1/metrics/%s/%d/tag\" id=\"%d\">[%d] %s %s %s %d </li>\n", interfac.Exporter, interfac.Snmp_if, interfac.ID, interfac.Snmp_if, interfac.Name, interfac.Descr, interfac.Alias, interfac.Speed)
+		line = fmt.Sprintf("<li hx-swap=\"innerHTML\" hx-target=\"#body\" hx-post=\"./api/v1/body/%s/%d\" id=\"%d\">[%d] %s %s %s %d </li>\n", interfac.Exporter, interfac.Snmp_if, interfac.ID, interfac.Snmp_if, interfac.Name, interfac.Descr, interfac.Alias, interfac.Speed)
 		fmt.Fprintf(w, line)
+
 	}
 
 }
@@ -507,7 +444,9 @@ func getExportersRequest(w http.ResponseWriter, r *http.Request) {
 	//w.Header().Set("Content-Type", "application/json")
 
 	exporters, err := getExporterList()
-
+	sort.Slice(exporters, func(i, j int) bool {
+		return exporters[i].ID < exporters[j].ID
+	})
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -599,12 +538,16 @@ func main() {
 	mux := http.NewServeMux()
 	fileServer := http.FileServer(http.Dir("./static"))
 	//mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {})
-
+	mux.HandleFunc("/api/v1/body/{exporter}/{interface}", mainPage)
+	mux.HandleFunc("/api/v1/body/{exporter}/{interface}/{start}", mainPage)
+	mux.HandleFunc("/api/v1/body/{exporter}/{interface}/{start}/{end}", mainPage)
 	mux.HandleFunc("/api/v1/interfaces", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}", getInterfacesMetricsRequest)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/tag", renderChartTag)
-	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/{start}/{end}/png", renderChartPNG)
-	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/png", renderChartPNG)
+	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/{start}/{end}/png", renderTimeseriesChartPNG)
+	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/png", renderTimeseriesChartPNG)
+
+	mux.HandleFunc("/api/v1/flows/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{direction}/png", renderPieChartSourcePNG)
 
 	mux.HandleFunc("/api/v1/interfaces/{exporter}", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/exporters/list", getExportersRequest)

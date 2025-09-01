@@ -20,21 +20,37 @@
             value="{{.EndInputValue}}"
             step="300"
     />
-
+    <h1>Traffic rate</h1>
     <div id="chart_snmptraffic">
         <img width="600px" height="150px" src="{{.TrafficImg}}"/>
     </div>
-    <div id="chart_flowsrcinput">
-        <img width="300px" height="300px" src="{{.InputSrcPie}}"/>
+    <hr>
+    <h1>Bytes</h1>
+    <div id="chart_flowsrcbytesinput">
+        <img width="300px" height="300px" src="{{.InputSrcBytesPie}}"/>
     </div>
-    <div id="chart_flowsrcoutput">
-        <img width="300px" height="300px" src="{{.OutputSrcPie}}"/>
+    <div id="chart_flowdstbytesinput">
+        <img width="300px" height="300px" src="{{.InputDstBytesPie}}"/>
     </div>
-    <div id="chart_flowdstinput">
-        <img width="300px" height="300px" src="{{.InputDstPie}}"/>
+    <div id="chart_flowsrcbytesoutput">
+        <img width="300px" height="300px" src="{{.OutputSrcBytesPie}}"/>
     </div>
-    <div id="chart_flowdstoutput">
-        <img width="300px" height="300px" src="{{.OutputDstPie}}"/>
+    <div id="chart_flowdstbytesoutput">
+        <img width="300px" height="300px" src="{{.OutputDstBytesPie}}"/>
+    </div>
+    <hr/>
+    <h1>Packets</h1>
+    <div id="chart_flowsrcpktsinput">
+        <img width="300px" height="300px" src="{{.InputSrcPktsPie}}"/>
+    </div>
+    <div id="chart_flowdstpktsinput">
+        <img width="300px" height="300px" src="{{.InputDstPktsPie}}"/>
+    </div>
+    <div id="chart_flowsrcpktsoutput">
+        <img width="300px" height="300px" src="{{.OutputSrcPktsPie}}"/>
+    </div>
+    <div id="chart_flowdstpktsoutput">
+        <img width="300px" height="300px" src="{{.OutputDstPktsPie}}"/>
     </div>
     <!--<iframe src="./world.html" style="width: 200px; height: 200px; border: none;"></iframe>-->
 </div>

@@ -10,18 +10,22 @@ import (
 )
 
 type mainPageData struct {
-	Exporter        string
-	Interface       string
-	Start           time.Time
-	End             time.Time
-	StartInputValue string
-	EndInputValue   string
-	Metrics         []Metric
-	TrafficImg      string
-	InputSrcPie     string
-	OutputSrcPie    string
-	InputDstPie     string
-	OutputDstPie    string
+	Exporter          string
+	Interface         string
+	Start             time.Time
+	End               time.Time
+	StartInputValue   string
+	EndInputValue     string
+	Metrics           []Metric
+	TrafficImg        string
+	InputSrcBytesPie  string
+	OutputSrcBytesPie string
+	InputDstBytesPie  string
+	OutputDstBytesPie string
+	InputSrcPktsPie   string
+	OutputSrcPktsPie  string
+	InputDstPktsPie   string
+	OutputDstPktsPie  string
 }
 
 func mainPage(w http.ResponseWriter, r *http.Request) {
@@ -63,18 +67,22 @@ func mainPage(w http.ResponseWriter, r *http.Request) {
 	metrics, err := getInterfacesMetrics(exporterStr, interfaceStr, start, end)
 
 	data = mainPageData{
-		Exporter:        exporterStr,
-		Interface:       interfaceStr,
-		Start:           start,
-		End:             end,
-		StartInputValue: start.Format("2006-01-02T15:04"),
-		EndInputValue:   end.Format("2006-01-02T15:04"),
-		Metrics:         metrics,
-		TrafficImg:      fmt.Sprintf("./api/v1/metrics/%s/%s/%d/%d/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
-		InputSrcPie:     fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/input/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
-		OutputSrcPie:    fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/output/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
-		InputDstPie:     fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/input/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
-		OutputDstPie:    fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/output/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		Exporter:          exporterStr,
+		Interface:         interfaceStr,
+		Start:             start,
+		End:               end,
+		StartInputValue:   start.Format("2006-01-02T15:04"),
+		EndInputValue:     end.Format("2006-01-02T15:04"),
+		Metrics:           metrics,
+		TrafficImg:        fmt.Sprintf("./api/v1/metrics/%s/%s/%d/%d/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		InputSrcBytesPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/bytes/input/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		OutputSrcBytesPie: fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/bytes/output/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		InputDstBytesPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/bytes/input/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		OutputDstBytesPie: fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/bytes/output/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		InputSrcPktsPie:   fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/pkts/input/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		OutputSrcPktsPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/pkts/output/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		InputDstPktsPie:   fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/pkts/input/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		OutputDstPktsPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/pkts/output/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
 	}
 	tmpl, err := template.ParseFiles("./static/body.gotmpl.go.html")
 	if err != nil {

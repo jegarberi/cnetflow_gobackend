@@ -547,7 +547,7 @@ func main() {
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/{start}/{end}/png", renderTimeseriesChartPNG)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/png", renderTimeseriesChartPNG)
 
-	mux.HandleFunc("/api/v1/flows/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{direction}/png", renderPieChartSourcePNG)
+	mux.HandleFunc("/api/v1/flows/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/png", renderPieChartSourcePNG)
 
 	mux.HandleFunc("/api/v1/interfaces/{exporter}", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/exporters/list", getExportersRequest)

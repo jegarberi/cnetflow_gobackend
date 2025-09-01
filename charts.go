@@ -30,7 +30,11 @@ func renderChartTag(w http.ResponseWriter, r *http.Request) {
 	w.Write(body)
 }
 
-func FormatIEC(v interface{}) string {
+func FormatIECRate(v interface{}) string {
+	return FormatIEC(v, false)
+}
+
+func FormatIEC(v interface{}, bytes bool) string {
 	var ret string
 	var bits float64
 	switch v.(type) {
@@ -39,9 +43,14 @@ func FormatIEC(v interface{}) string {
 	case float64:
 		bits = v.(float64)
 	}
-
+	var suffix string
+	if bytes {
+		suffix = "B"
+	} else {
+		suffix = "b/s"
+	}
 	if bits == 0 {
-		ret = "0 b/s"
+		ret = fmt.Sprintf("0 %s", suffix)
 		log.Println(ret)
 		return ret
 	}
@@ -53,38 +62,56 @@ func FormatIEC(v interface{}) string {
 
 	if bits < 1024 {
 		if neg {
-			ret = fmt.Sprintf("-%.*f b/s", 1, bits)
+			if bytes {
+				ret = fmt.Sprintf("-%.*f B", 1, bits*8)
+			} else {
+				ret = fmt.Sprintf("-%.*f b/s", 1, bits)
+			}
+
 			log.Println(ret)
 			return ret
 		}
-		ret = fmt.Sprintf("%.*f b/s", 1, bits)
+		if bytes {
+			ret = fmt.Sprintf("%.*f B", 1, bits*8)
+		}
+
 		log.Println(ret)
 		return ret
 	}
 
-	units := []string{"b", "Kib", "Mib", "Gib", "Tib", "Pib", "Eib"}
+	units := []string{"", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei"}
 	val := float64(bits)
 	idx := 0
 	for val >= 1024 && idx < len(units)-1 {
 		val /= 1024
 		idx++
-		if idx > 1 {
-			log.Println("idx > 1")
-		}
 	}
 
 	prec := 1
 	if val >= 10 {
 		prec = 0
 	}
+	var num string
 
-	num := fmt.Sprintf("%.*f", prec, val)
 	if neg {
-		ret = fmt.Sprintf("-%s %s/s", num, units[idx])
+		if bytes {
+			num = fmt.Sprintf("%.*f", prec, val*8)
+			ret = fmt.Sprintf("-%s %s%s", num, units[idx], suffix)
+		} else {
+			num = fmt.Sprintf("%.*f", prec, val)
+			ret = fmt.Sprintf("-%s %s%s", num, units[idx], suffix)
+		}
+
 		log.Println(ret)
 		return ret
 	}
-	ret = fmt.Sprintf("%s %s/s", num, units[idx])
+	num = fmt.Sprintf("%.*f", prec, val)
+	if bytes {
+		ret = fmt.Sprintf("%s %s%s", num, units[idx], suffix)
+	} else {
+		ret = fmt.Sprintf("%s %s%s", num, units[idx], suffix)
+	}
+
 	log.Println(ret)
 	return ret
 }
@@ -249,7 +276,7 @@ func renderTimeseriesChartPNG(w http.ResponseWriter, r *http.Request) {
 			ValueFormatter: chart.TimeMinuteValueFormatter,
 		},
 		YAxis: chart.YAxis{
-			ValueFormatter: FormatIEC,
+			ValueFormatter: FormatIECRate,
 		},
 		Series: []chart.Series{
 			chart.TimeSeries{
@@ -431,30 +458,56 @@ func renderPieChartSourcePNG(w http.ResponseWriter, r *http.Request) {
 	src_or_dst := r.PathValue("src_or_dst")
 	direction := r.PathValue("direction")
 	interfac := r.PathValue("interface")
-
+	bytes_pkts_flows := r.PathValue("bytes_pkts_flows")
 	if src_or_dst == "" {
 		src_or_dst = "src"
 	}
-	if src_or_dst == "src" {
-		for _, metric := range metrics {
-			if _, ok := octets[metric.SrcAddr]; !ok {
-				octets[metric.SrcAddr] = metric.TotalOctets
-			}
-			octets[metric.SrcAddr] += metric.TotalOctets
-		}
-	} else if src_or_dst == "dst" {
-		for _, metric := range metrics {
-			if _, ok := octets[metric.DstAddr]; !ok {
-				octets[metric.DstAddr] = metric.TotalOctets
-			}
-			octets[metric.DstAddr] += metric.TotalOctets
-		}
+	if bytes_pkts_flows == "" {
+		bytes_pkts_flows = "bytes"
 	}
-	sort.Slice(metrics, func(i, j int) bool {
-		return metrics[i].TotalOctets > metrics[j].TotalOctets
-	})
+	if bytes_pkts_flows == "bytes" {
+
+		if src_or_dst == "src" {
+			for _, metric := range metrics {
+				if _, ok := octets[metric.SrcAddr]; !ok {
+					octets[metric.SrcAddr] = metric.TotalOctets
+				}
+				octets[metric.SrcAddr] += metric.TotalOctets
+			}
+		} else if src_or_dst == "dst" {
+			for _, metric := range metrics {
+				if _, ok := octets[metric.DstAddr]; !ok {
+					octets[metric.DstAddr] = metric.TotalOctets
+				}
+				octets[metric.DstAddr] += metric.TotalOctets
+			}
+		}
+		sort.Slice(metrics, func(i, j int) bool {
+			return metrics[i].TotalOctets > metrics[j].TotalOctets
+		})
+	} else if bytes_pkts_flows == "pkts" {
+		if src_or_dst == "src" {
+			for _, metric := range metrics {
+				if _, ok := octets[metric.SrcAddr]; !ok {
+					octets[metric.SrcAddr] = metric.TotalPackets
+				}
+				octets[metric.SrcAddr] += metric.TotalPackets
+			}
+		} else if src_or_dst == "dst" {
+			for _, metric := range metrics {
+				if _, ok := octets[metric.DstAddr]; !ok {
+					octets[metric.DstAddr] = metric.TotalPackets
+				}
+				octets[metric.DstAddr] += metric.TotalPackets
+			}
+		}
+		sort.Slice(metrics, func(i, j int) bool {
+			return metrics[i].TotalOctets > metrics[j].TotalPackets
+		})
+	}
+
 	for addr, metric := range octets {
-		key := fmt.Sprintf("%s  %s", addr, FormatIEC(metric))
+		key := fmt.Sprintf("%s  %s", addr, FormatIEC(metric, true))
 		if _, ok := octets_with_totals[key]; !ok {
 			octets_with_totals[key] = metric
 		}

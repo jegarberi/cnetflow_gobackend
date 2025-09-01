@@ -403,6 +403,16 @@ func getFlowMetricsForChart(r *http.Request) ([]FlowData, error) {
 		return nil, errors.New("Exporter not found")
 	}
 	log.Println(exporterInet)
+	/*
+		q := fmt.Sprintf("select bucket_5min,exporter,srcaddr,dstaddr,srcport,dstport,src_as,dst_as,total_packets,total_octets,input,output from flows_v5_agg_5min where exporter=$1 and "+
+			input_or_output+
+			" = $2 and bucket_5min >= $3 and bucket_5min <= $4 "+
+			" UNION "+
+			"select bucket_5min,exporter,srcaddr,dstaddr,srcport,dstport,src_as,dst_as,total_packets,total_octets,input,output from flows_v9_agg_5min where exporter=$1 and "+
+			input_or_output+" = $2 and bucket_5min >= $3 and bucket_5min <= $4",
+			exporterInet, interfaceStr, start, end)
+
+	*/
 	rows, err := config.db.Query("select bucket_5min,exporter,srcaddr,dstaddr,srcport,dstport,src_as,dst_as,total_packets,total_octets,input,output from flows_v5_agg_5min where exporter=$1 and "+
 		input_or_output+
 		" = $2 and bucket_5min >= $3 and bucket_5min <= $4 "+

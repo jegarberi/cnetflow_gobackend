@@ -27,7 +27,39 @@ type mainPageData struct {
 	InputDstPktsPie   string
 	OutputDstPktsPie  string
 }
+type highchartsData struct {
+	Exporter  string
+	Interface string
+	Start     string
+	End       string
+}
 
+func highcharts(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/js")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	exporterStr := r.PathValue("exporter")
+	interfaceStr := r.PathValue("interface")
+	startStr := r.PathValue("start")
+	endStr := r.PathValue("end")
+	startEpoch, _ := strconv.ParseInt(startStr, 10, 64)
+	//endEpoch, _ := strconv.ParseInt(endStr, 10, 64)
+	start := time.Unix(startEpoch, 0)
+	tmpl, err := template.ParseFiles("./static/charts.gotmpl.js")
+	if err != nil {
+		log.Fatalf("Error parsing template: %v", err)
+	}
+	data := highchartsData{
+		Exporter:  exporterStr,
+		Interface: interfaceStr,
+		Start:     start.Format("2006-01-02T15:04"),
+		End:       endStr,
+	}
+
+	err = tmpl.Execute(w, data)
+	if err != nil {
+		log.Fatalf("Error executing template: %v", err)
+	}
+}
 func mainPage(w http.ResponseWriter, r *http.Request) {
 	var data mainPageData
 	w.Header().Set("Content-Type", "image/png")
@@ -84,7 +116,7 @@ func mainPage(w http.ResponseWriter, r *http.Request) {
 		InputDstPktsPie:   fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/pkts/input/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
 		OutputDstPktsPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/pkts/output/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
 	}
-	tmpl, err := template.ParseFiles("./static/body.gotmpl.go.html")
+	tmpl, err := template.ParseFiles("./static/body.gotmpl.html")
 	if err != nil {
 		log.Fatalf("Error parsing template: %v", err)
 	}

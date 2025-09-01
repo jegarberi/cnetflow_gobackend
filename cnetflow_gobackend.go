@@ -307,7 +307,8 @@ func getInterfacesRequest(w http.ResponseWriter, r *http.Request) {
 func handleQueryRequest(w http.ResponseWriter, r *http.Request) {
 	value := r.PathValue("path")
 	log.Println(value)
-	http.Error(w, "Not implemented", http.StatusNotImplemented)
+	body := fmt.Sprintf("Not implemented\nPath: %s", value)
+	http.Error(w, body, http.StatusNotImplemented)
 }
 
 func getInterfacesList(exporter string) ([]Interface, error) {
@@ -546,7 +547,7 @@ func main() {
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/tag", renderChartTag)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/{start}/{end}/png", renderTimeseriesChartPNG)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/png", renderTimeseriesChartPNG)
-
+	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/js", highcharts)
 	mux.HandleFunc("/api/v1/flows/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/png", renderPieChartSourcePNG)
 
 	mux.HandleFunc("/api/v1/interfaces/{exporter}", getInterfacesRequest)
@@ -554,6 +555,7 @@ func main() {
 	mux.HandleFunc("/api/v1/flows/{exporter}", getFlowsRequest)
 	mux.HandleFunc("/api/v1/flows/{exporter}/{last}", getFlowsRequest)
 	mux.HandleFunc("/api/v1/query/{path...}", handleQueryRequest)
+
 	mux.Handle("/", http.StripPrefix("", fileServer))
 	err = http.ListenAndServe(config.bind_address, mux)
 	if err != nil {

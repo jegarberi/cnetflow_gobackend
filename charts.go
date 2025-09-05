@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
 	"log"
 	"math"
 	"net/http"
@@ -413,7 +414,7 @@ func getFlowMetricsForChart(r *http.Request) ([]FlowData, error) {
 			exporterInet, interfaceStr, start, end)
 
 	*/
-	rows, err := config.db.Query("select bucket_5min,exporter,srcaddr,dstaddr,srcport,dstport,src_as,dst_as,total_packets,total_octets,input,output from flows_v5_agg_5min where exporter=$1 and "+
+	rows, err := config.Db.Query("select bucket_5min,exporter,srcaddr,dstaddr,srcport,dstport,src_as,dst_as,total_packets,total_octets,input,output from flows_v5_agg_5min where exporter=$1 and "+
 		input_or_output+
 		" = $2 and bucket_5min >= $3 and bucket_5min <= $4 "+
 		" UNION "+
@@ -459,7 +460,14 @@ func getFlowMetricsForChart(r *http.Request) ([]FlowData, error) {
 	return flows, nil
 }
 
-func renderPieChartSourcePNG(w http.ResponseWriter, r *http.Request) {
+func renderPieChartJS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+
+	http.Error(w, "Not implemented", http.StatusNotImplemented)
+}
+
+func renderPieChartPNG(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	metrics, err := getFlowMetricsForChart(r)

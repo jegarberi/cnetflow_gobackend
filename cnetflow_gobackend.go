@@ -64,7 +64,7 @@ func getFlowsDB(exporter int64, last int64) ([]FlowGEO, int64) {
 	var rows *sql.Rows
 	var err error
 	last = 0
-	rows, err = config.db.Query("select * from flows_v9 where exporter = $2 and last >= $1 UNION select * from flows_v5 where exporter = $2 and last >= $1 ", last, exporter)
+	rows, err = config.Db.Query("select * from flows_v9 where exporter = $2 and last >= $1 UNION select * from flows_v5 where exporter = $2 and last >= $1 ", last, exporter)
 	if err != nil {
 		return nil, 0
 	}
@@ -124,18 +124,18 @@ func getFlowsDB(exporter int64, last int64) ([]FlowGEO, int64) {
 					log.Println(err.Error())
 				}
 				//log.Println(addr)
-				err = config.mmdb.Lookup(addr).Decode(&record)
-				err = config.mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Latitude, "location", "latitude")
-				err = config.mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Longitude, "location", "longitude")
+				err = config.Mmdb.Lookup(addr).Decode(&record)
+				err = config.Mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Latitude, "location", "latitude")
+				err = config.Mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Longitude, "location", "longitude")
 				//log.Println(record)
 				addr, err = netip.ParseAddr(flow_geo.DstAddr.String())
 				if err != nil {
 					log.Println(err.Error())
 				}
 				//log.Println(addr)
-				err = config.mmdb.Lookup(addr).Decode(&record)
-				err = config.mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Latitude, "location", "latitude")
-				err = config.mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Longitude, "location", "longitude")
+				err = config.Mmdb.Lookup(addr).Decode(&record)
+				err = config.Mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Latitude, "location", "latitude")
+				err = config.Mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Longitude, "location", "longitude")
 				//log.Println(record)
 
 			} else {
@@ -235,7 +235,7 @@ func getInterfacesMetrics(exporter string, interfac string, start time.Time, end
 	log.Println("start: ", start.UTC().String())
 	log.Println("end : ", end.UTC().String())
 
-	rows, err = config.db.Query("select inserted_at,octets_in,octets_out from interface_metrics where exporter = $1 and snmp_index = $2 and (inserted_at >= $3 and inserted_at <= $4 )", exporter, interfac, start.UTC(), end.UTC())
+	rows, err = config.Db.Query("select inserted_at,octets_in,octets_out from interface_metrics where exporter = $1 and snmp_index = $2 and (inserted_at >= $3 and inserted_at <= $4 )", exporter, interfac, start.UTC(), end.UTC())
 	if err != nil {
 		return nil, err
 	}
@@ -318,10 +318,10 @@ func getInterfacesList(exporter string) ([]Interface, error) {
 	var err error
 	if exporter == "" {
 		log.Println("No exporter")
-		rows, err = config.db.Query("select id,exporter,snmp_index,description,alias,speed,enabled from interfaces ;")
+		rows, err = config.Db.Query("select id,exporter,snmp_index,description,alias,speed,enabled from interfaces ;")
 	} else {
 		log.Println("Exporter: " + exporter)
-		rows, err = config.db.Query("select id,exporter,snmp_index,description,alias,speed,enabled from interfaces where exporter = $1 ;", exporter)
+		rows, err = config.Db.Query("select id,exporter,snmp_index,description,alias,speed,enabled from interfaces where exporter = $1 ;", exporter)
 	}
 
 	if err != nil {
@@ -407,7 +407,7 @@ func getExporterList() ([]Exporter, error) {
 	var rows *sql.Rows
 	var err error
 
-	rows, err = config.db.Query("select id,ip_bin,ip_inet,name from exporters ;")
+	rows, err = config.Db.Query("select id,ip_bin,ip_inet,name from exporters ;")
 	if err != nil {
 		return nil, err
 	}
@@ -506,14 +506,15 @@ func main() {
 	config = Config{}
 	//TIP <p>Press <shortcut actionId="ShowIntentionActions"/> when your caret is at the underlined text
 	// to see how GoLand suggests fixing the warning.</p><p>Alternatively, if available, click the lightbulb to view possible fixes.</p>
-	config.bind_address = os.Getenv("CNETFLOW_GOBACKEND_BIND")
-	config.conn_string = os.Getenv("PG_CONN_STRING")
-	config.maxmind_database = os.Getenv("MAXMIND_DATABASE")
-	if config.maxmind_database == "" {
+	config.Bind_address = os.Getenv("CNETFLOW_GOBACKEND_BIND")
+	config.Conn_string = os.Getenv("PG_CONN_STRING")
+	config.Maxmind_database = os.Getenv("MAXMIND_DATABASE")
+	config.Dbrest = os.Getenv("PGREST_URL")
+	if config.Maxmind_database == "" {
 		log.Println("MAXMIND_DATABASE NOT SET. USING ./GeoLite2-City.mmdb")
-		config.maxmind_database = "./GeoLite2-City.mmdb"
+		config.Maxmind_database = "./GeoLite2-City.mmdb"
 	}
-	config.mmdb, err = maxminddb.Open(config.maxmind_database)
+	config.Mmdb, err = maxminddb.Open(config.Maxmind_database)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -522,33 +523,35 @@ func main() {
 		if err != nil {
 
 		}
-	}(config.mmdb)
-	config.conn_string += "?sslmode=disable"
-	if config.conn_string == "" {
+	}(config.Mmdb)
+	config.Conn_string += "?sslmode=disable"
+	if config.Conn_string == "" {
 		panic("PG_CONN_STRING not defined...")
 	}
 
-	config.db, err = sql.Open("postgres", config.conn_string)
+	config.Db, err = sql.Open("postgres", config.Conn_string)
 
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	if config.bind_address == "" {
-		config.bind_address = ":3002"
+	if config.Bind_address == "" {
+		config.Bind_address = ":3002"
 	}
 	mux := http.NewServeMux()
 	fileServer := http.FileServer(http.Dir("./static"))
 	//mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {})
-	mux.HandleFunc("/api/v1/body/{exporter}/{interface}", mainPage)
-	mux.HandleFunc("/api/v1/body/{exporter}/{interface}/{start}", mainPage)
-	mux.HandleFunc("/api/v1/body/{exporter}/{interface}/{start}/{end}", mainPage)
+	mux.HandleFunc("/api/v1/body/{exporter}/{interface}", mainPageHighcharts)
+	mux.HandleFunc("/api/v1/body/{exporter}/{interface}/{start}", mainPageHighcharts)
+	mux.HandleFunc("/api/v1/body/{exporter}/{interface}/{start}/{end}", mainPageHighcharts)
 	mux.HandleFunc("/api/v1/interfaces", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}", getInterfacesMetricsRequest)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/tag", renderChartTag)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/{start}/{end}/png", renderTimeseriesChartPNG)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/png", renderTimeseriesChartPNG)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/js", highcharts)
-	mux.HandleFunc("/api/v1/flows/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/png", renderPieChartSourcePNG)
+	mux.HandleFunc("/api/v1/flows/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/png", renderPieChartPNG)
+	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/{start}/{end}/js", renderTimeseriesChartJS)
+	mux.HandleFunc("/api/v1/flows/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/js", renderPieChartJS)
 
 	mux.HandleFunc("/api/v1/interfaces/{exporter}", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/exporters/list", getExportersRequest)
@@ -557,7 +560,7 @@ func main() {
 	mux.HandleFunc("/api/v1/query/{path...}", handleQueryRequest)
 
 	mux.Handle("/", http.StripPrefix("", fileServer))
-	err = http.ListenAndServe(config.bind_address, mux)
+	err = http.ListenAndServe(config.Bind_address, mux)
 	if err != nil {
 		log.Fatal(err.Error())
 	}

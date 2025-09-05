@@ -6,14 +6,17 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	t "text/template"
 	"time"
 )
 
-type mainPageData struct {
+type MainPageData struct {
 	Exporter          string
 	Interface         string
 	Start             time.Time
 	End               time.Time
+	StartUnix         int64
+	EndUnix           int64
 	StartInputValue   string
 	EndInputValue     string
 	Metrics           []Metric
@@ -26,12 +29,34 @@ type mainPageData struct {
 	OutputSrcPktsPie  string
 	InputDstPktsPie   string
 	OutputDstPktsPie  string
+	PostgrestUrl      string
+	Container         string
 }
 type highchartsData struct {
 	Exporter  string
 	Interface string
 	Start     string
 	End       string
+}
+
+func renderTimeseriesChartJS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	var data = FillDataFromPath(r)
+	data.Container = "chart_snmptraffic"
+
+	tmpl, err := t.ParseFiles("./static/charts.timeseries.gotmpl.js")
+	if err != nil {
+		log.Println(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = tmpl.Execute(w, data)
+	if err != nil {
+		log.Println(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func highcharts(w http.ResponseWriter, r *http.Request) {
@@ -60,10 +85,9 @@ func highcharts(w http.ResponseWriter, r *http.Request) {
 		log.Fatalf("Error executing template: %v", err)
 	}
 }
-func mainPage(w http.ResponseWriter, r *http.Request) {
-	var data mainPageData
-	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+
+func FillDataFromPath(r *http.Request) MainPageData {
+
 	exporterStr := r.PathValue("exporter")
 	log.Println(exporterStr)
 	interfaceStr := r.PathValue("interface")
@@ -97,26 +121,49 @@ func mainPage(w http.ResponseWriter, r *http.Request) {
 	log.Println("start: ", start)
 	log.Println("end : ", end)
 	metrics, err := getInterfacesMetrics(exporterStr, interfaceStr, start, end)
-
-	data = mainPageData{
+	if err != nil {
+		log.Println(err.Error())
+	}
+	var data = MainPageData{
+		PostgrestUrl:      config.Dbrest,
 		Exporter:          exporterStr,
 		Interface:         interfaceStr,
 		Start:             start,
 		End:               end,
+		StartUnix:         start.Unix(),
+		EndUnix:           end.Unix(),
 		StartInputValue:   start.Format("2006-01-02T15:04"),
 		EndInputValue:     end.Format("2006-01-02T15:04"),
 		Metrics:           metrics,
 		TrafficImg:        fmt.Sprintf("./api/v1/metrics/%s/%s/%d/%d/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
-		InputSrcBytesPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/bytes/input/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
-		OutputSrcBytesPie: fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/bytes/output/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
-		InputDstBytesPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/bytes/input/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
-		OutputDstBytesPie: fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/bytes/output/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
-		InputSrcPktsPie:   fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/pkts/input/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
-		OutputSrcPktsPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/pkts/output/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
-		InputDstPktsPie:   fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/pkts/input/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
-		OutputDstPktsPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/pkts/output/png", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		InputSrcBytesPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/bytes/input/js", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		OutputSrcBytesPie: fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/bytes/output/js", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		InputDstBytesPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/bytes/input/js", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		OutputDstBytesPie: fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/bytes/output/js", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		InputSrcPktsPie:   fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/pkts/input/js", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		OutputSrcPktsPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/src/pkts/output/js", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		InputDstPktsPie:   fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/pkts/input/js", exporterStr, interfaceStr, start.Unix(), end.Unix()),
+		OutputDstPktsPie:  fmt.Sprintf("./api/v1/flows/%s/%s/%d/%d/dst/pkts/output/js", exporterStr, interfaceStr, start.Unix(), end.Unix()),
 	}
-	tmpl, err := template.ParseFiles("./static/body.gotmpl.html")
+	return data
+}
+
+func mainPageHighcharts(w http.ResponseWriter, r *http.Request) {
+	var data = FillDataFromPath(r)
+	tmpl, err := template.ParseFiles("./static/body.js.gotmpl.html")
+	if err != nil {
+		log.Fatalf("Error parsing template: %v", err)
+	}
+
+	err = tmpl.Execute(w, data)
+	if err != nil {
+		log.Fatalf("Error executing template: %v", err)
+	}
+}
+
+func mainPagePNG(w http.ResponseWriter, r *http.Request) {
+	var data MainPageData = FillDataFromPath(r)
+	tmpl, err := template.ParseFiles("./static/body.png.gotmpl.html")
 	if err != nil {
 		log.Fatalf("Error parsing template: %v", err)
 	}

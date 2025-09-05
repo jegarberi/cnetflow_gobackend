@@ -27,11 +27,12 @@ type Metric struct {
 }
 
 type Config struct {
-	bind_address     string
-	conn_string      string
-	maxmind_database string
-	db               *sql.DB
-	mmdb             *maxminddb.Reader
+	Bind_address     string
+	Conn_string      string
+	Maxmind_database string
+	Db               *sql.DB
+	Dbrest           string
+	Mmdb             *maxminddb.Reader
 }
 
 type Coordinates struct {

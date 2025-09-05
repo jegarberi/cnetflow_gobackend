@@ -46,8 +46,8 @@ chart = Highcharts.chart({{.Container}}, {
 });
 timeout = setTimeout(function(){
     $.getJSON('{{.PostgrestUrl}}interface_metrics?exporter=eq.{{.Exporter}}&snmp_index=eq.{{.Interface}}&inserted_at=gt.{{.StartInputValue}} {{.TZ}}&inserted_at=lt.{{.EndInputValue}} {{.TZ}}&order=inserted_at.asc', function(data) {
-        let seriesData_in = {"type": "line","name" : "bits/s", "data" : []};
-        let seriesData_out = {"type": "line","name" : "bits/s", "data" : []};
+        let seriesData_in = {"type": "line","name" : "bits/s in", "data" : []};
+        let seriesData_out = {"type": "line","name" : "bits/s out", "data" : []};
         debugger;
         for (let i in data){
             if (i > 0){

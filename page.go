@@ -31,6 +31,7 @@ type MainPageData struct {
 	OutputDstPktsPie  string
 	PostgrestUrl      string
 	Container         string
+	TZ                string
 }
 type highchartsData struct {
 	Exporter  string
@@ -125,6 +126,7 @@ func FillDataFromPath(r *http.Request) MainPageData {
 		log.Println(err.Error())
 	}
 	var data = MainPageData{
+		TZ:                config.TZ,
 		PostgrestUrl:      config.Dbrest,
 		Exporter:          exporterStr,
 		Interface:         interfaceStr,

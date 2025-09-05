@@ -9,7 +9,7 @@ chart = Highcharts.chart({{.Container}}, {
     },
     yAxis: {
         title: {
-            text: 'Octets per second'
+            text: 'bits/s'
         }
     },
     xAxis: {
@@ -45,17 +45,19 @@ chart = Highcharts.chart({{.Container}}, {
     }
 });
 timeout = setTimeout(function(){
-    $.getJSON('{{.PostgrestUrl}}interface_metrics?exporter=eq.{{.Exporter}}&snmp_index=eq.{{.Interface}}&inserted_at=gt.{{.StartInputValue}}&inserted_at=lt.{{.EndInputValue}}&order=inserted_at.asc', function(data) {
-        let seriesData_in = {"type": "line","name" : "Octets In", "data" : []};
-        let seriesData_out = {"type": "line","name" : "Octets Out", "data" : []};
+    $.getJSON('{{.PostgrestUrl}}interface_metrics?exporter=eq.{{.Exporter}}&snmp_index=eq.{{.Interface}}&inserted_at=gt.{{.StartInputValue}} {{.TZ}}&inserted_at=lt.{{.EndInputValue}} {{.TZ}}&order=inserted_at.asc', function(data) {
+        let seriesData_in = {"type": "line","name" : "bits/s", "data" : []};
+        let seriesData_out = {"type": "line","name" : "bits/s", "data" : []};
         debugger;
         for (let i in data){
             if (i > 0){
-                data_rate_in = 0
-                data_rate_out = 0
-                interval = 300
-                data_rate_in = (data[i].octets_in - data[i-1].octets_in)*8/interval;
-                data_rate_out = (data[i].octets_out - data[i-1].octets_out)*8/interval;
+                let data_rate_in = 0
+                let data_rate_out = 0
+                const last = Math.floor(Date.parse(data[i-1].inserted_at) / 1000);
+                const now = Math.floor(Date.parse(data[i].inserted_at) / 1000);
+                const interval = now - last;
+                data_rate_in = 8*(data[i].octets_in - data[i-1].octets_in)/interval;
+                data_rate_out = 8*(data[i].octets_out - data[i-1].octets_out)/interval;
                 if (data_rate_in < 0) {
                     data_rate_in = 0
                 }

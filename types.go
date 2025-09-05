@@ -32,6 +32,7 @@ type Config struct {
 	Maxmind_database string
 	Db               *sql.DB
 	Dbrest           string
+	TZ               string
 	Mmdb             *maxminddb.Reader
 }
 

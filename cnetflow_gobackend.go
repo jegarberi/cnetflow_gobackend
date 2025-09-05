@@ -271,7 +271,7 @@ func getInterfacesMetrics(exporter string, interfac string, start time.Time, end
 		metrics = append(metrics, metric)
 
 	}
-	log.Println(metrics)
+	//log.Println(metrics)
 	sort.Slice(metrics, func(i, j int) bool {
 		//return times[i].Before(times[j]) // ascending
 		return metrics[i].Timestamp.Before(metrics[j].Timestamp)
@@ -508,6 +508,7 @@ func main() {
 	// to see how GoLand suggests fixing the warning.</p><p>Alternatively, if available, click the lightbulb to view possible fixes.</p>
 	config.Bind_address = os.Getenv("CNETFLOW_GOBACKEND_BIND")
 	config.Conn_string = os.Getenv("PG_CONN_STRING")
+	config.TZ = os.Getenv("TZ")
 	config.Maxmind_database = os.Getenv("MAXMIND_DATABASE")
 	config.Dbrest = os.Getenv("PGREST_URL")
 	if config.Maxmind_database == "" {

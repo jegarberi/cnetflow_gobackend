@@ -39,7 +39,7 @@ chart_{{.Container}} = Highcharts.chart('{{.Container}}', {
                 filter: {
                     operator: '>',
                     property: 'percentage',
-                    value: 10
+                    value: 1
                 }
             }]
         }
@@ -48,9 +48,9 @@ chart_{{.Container}} = Highcharts.chart('{{.Container}}', {
     ]
 });
 timeout_{{.Container}}  = setTimeout(function(){
-    $.getJSON('{{.PostgrestUrl}}flows_v9_agg_5min?select={{.SrcOrDst}}addr,{{.PktsOrBytes}}.sum()&exporter=eq.{{.Exporter}}&{{.InputOrOutput}}=eq.{{.Interface}}&bucket_5min=gt.{{.StartInputValue}}%20&bucket_5min=lt.{{.EndInputValue}}%20', function(data) {
+    $.getJSON('{{.PostgrestUrl}}flows_v9_agg_5min?select={{.SrcOrDst}}addr,{{.PktsOrBytes}}.sum()&exporter=eq.{{.Exporter}}&{{.InputOrOutput}}=eq.{{.Interface}}&bucket_5min=gt.{{.StartInputValue}}&bucket_5min=lt.{{.EndInputValue}}', function(data) {
         debugger;
-        seriesData = {name: "Input {{.SrcOrDst}}Addr Octets", colorbypoint: true, data: []};
+        seriesData = {name: "Input {{.SrcOrDst}}Addr {{.PktsOrBytes}}", colorbypoint: true, data: []};
         for (let i in data){
             let newdata = {name: data[i].{{.SrcOrDst}}addr, y: data[i].sum    };
             seriesData.data.push(newdata);

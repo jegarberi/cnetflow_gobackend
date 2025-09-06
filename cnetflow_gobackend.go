@@ -232,10 +232,10 @@ func getInterfacesMetrics(exporter string, interfac string, start time.Time, end
 	var metrics []Metric
 	log.Println("start: ", start)
 	log.Println("end : ", end)
-	log.Println("start: ", start.UTC().String())
-	log.Println("end : ", end.UTC().String())
+	log.Println("start: ", start.String())
+	log.Println("end : ", end.String())
 
-	rows, err = config.Db.Query("select inserted_at,octets_in,octets_out from interface_metrics where exporter = $1 and snmp_index = $2 and (inserted_at >= $3 and inserted_at <= $4 )", exporter, interfac, start.UTC(), end.UTC())
+	rows, err = config.Db.Query("select inserted_at,octets_in,octets_out from interface_metrics where exporter = $1 and snmp_index = $2 and (inserted_at >= $3 and inserted_at <= $4 )", exporter, interfac, start.String(), end.String())
 	if err != nil {
 		return nil, err
 	}
@@ -401,8 +401,8 @@ func getInterfacesList(exporter string) ([]Interface, error) {
 	return interfaces, nil
 }
 
-func getExporterList() ([]Exporter, error) {
-	var exporters []Exporter
+func getExporterList() (map[int]Exporter, error) {
+	var exporters = make(map[int]Exporter)
 
 	var rows *sql.Rows
 	var err error
@@ -433,7 +433,7 @@ func getExporterList() ([]Exporter, error) {
 			log.Println(err.Error())
 			return nil, err
 		}
-		exporters = append(exporters, exporter)
+		exporters[int(exporter.ID)] = exporter
 		log.Println(exporter)
 		log.Println(exporters)
 	}
@@ -445,9 +445,9 @@ func getExportersRequest(w http.ResponseWriter, r *http.Request) {
 	//w.Header().Set("Content-Type", "application/json")
 
 	exporters, err := getExporterList()
-	sort.Slice(exporters, func(i, j int) bool {
+	/*sort.Slice(exporters, func(i, j int) bool {
 		return exporters[i].ID < exporters[j].ID
-	})
+	})*/
 	if err != nil {
 		log.Println(err.Error())
 	}
@@ -553,6 +553,7 @@ func main() {
 	mux.HandleFunc("/api/v1/flows/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/png", renderPieChartPNG)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/{start}/{end}/js", renderTimeseriesChartJS)
 	mux.HandleFunc("/api/v1/flows/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/js", renderPieChartJS)
+	mux.HandleFunc("/api/v1/flows/{container}/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/js", renderPieChartJS)
 
 	mux.HandleFunc("/api/v1/interfaces/{exporter}", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/exporters/list", getExportersRequest)

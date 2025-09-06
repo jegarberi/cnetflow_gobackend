@@ -460,13 +460,6 @@ func getFlowMetricsForChart(r *http.Request) ([]FlowData, error) {
 	return flows, nil
 }
 
-func renderPieChartJS(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/javascript")
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-
-	http.Error(w, "Not implemented", http.StatusNotImplemented)
-}
-
 func renderPieChartPNG(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")

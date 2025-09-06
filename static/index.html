@@ -5,13 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Page with Left Column List</title>
     <style>
+        html {
+            background-color: #141414;
+        }
         body {
+            background-color: #141414;
             margin: 0;
             padding: 0;
             font-family: Arial, sans-serif;
         }
         .pie {
-            float: left;
+            width: 50%;
+        }
+        .timeseries {
+            width: 100%;
         }
         .container {
             display: flex;
@@ -102,9 +109,9 @@
 
         .main-content {
             flex: 1;
-            min-width: 300px;
+            min-width: 100%;
             padding: 20px;
-            background-color: #fff;
+            background-color: #f0f0f0;
         }
 
         /* Responsive behavior for smaller screens */
@@ -148,18 +155,18 @@
         }
     </style>
     <noscript>Estamos en 2025, habilita javascript!</noscript>
-    <script src="./jquery-3.7.1.min.js"></script>
-    <script src="./highcharts.js"></script>
-    <script src="./drilldown.js"></script>
-    <script src="./sankey.js"></script>
-    <script src="./non-cartesian-zoom.js"></script>
-    <script src="./mouse-wheel-zoom.js"></script>
-    <script src="./exporting.js"></script>
-    <script src="./export-data.js"></script>
-    <script src="./accessibility.js"></script>
-    <script src="./adaptive.js"></script>
-    <script src="./htmx.min.js"></script>
-    <script src="./select.js"></script>
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <script src="js/highcharts.js"></script>
+    <script src="js/drilldown.js"></script>
+    <script src="js/sankey.js"></script>
+    <script src="js/non-cartesian-zoom.js"></script>
+    <script src="js/mouse-wheel-zoom.js"></script>
+    <script src="js/exporting.js"></script>
+    <script src="js/export-data.js"></script>
+    <script src="js/accessibility.js"></script>
+    <script src="js/adaptive.js"></script>
+    <script src="js/htmx.min.js"></script>
+    <script src="js/select.js"></script>
 
 </head>
 <body>

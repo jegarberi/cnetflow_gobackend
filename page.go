@@ -11,27 +11,35 @@ import (
 )
 
 type MainPageData struct {
-	Exporter          string
-	Interface         string
-	Start             time.Time
-	End               time.Time
-	StartUnix         int64
-	EndUnix           int64
-	StartInputValue   string
-	EndInputValue     string
-	Metrics           []Metric
-	TrafficImg        string
-	InputSrcBytesPie  string
-	OutputSrcBytesPie string
-	InputDstBytesPie  string
-	OutputDstBytesPie string
-	InputSrcPktsPie   string
-	OutputSrcPktsPie  string
-	InputDstPktsPie   string
-	OutputDstPktsPie  string
-	PostgrestUrl      string
-	Container         string
-	TZ                string
+	Exporter               string
+	ExporterIp             string
+	Interface              string
+	InputOrOutput          string
+	SrcOrDst               string
+	PktsOrBytes            string
+	Start                  time.Time
+	End                    time.Time
+	StartUnix              int64
+	EndUnix                int64
+	StartInputValue        string
+	EndInputValue          string
+	Metrics                []Metric
+	TrafficImg             string
+	InputSrcBytesPie       string
+	OutputSrcBytesPie      string
+	InputDstBytesPie       string
+	OutputDstBytesPie      string
+	InputSrcPktsPie        string
+	OutputSrcPktsPie       string
+	InputDstPktsPie        string
+	OutputDstPktsPie       string
+	PostgrestUrl           string
+	Container              string
+	PieChartBytesSrcInput  string
+	PieChartBytesDstInput  string
+	PieChartBytesSrcOutput string
+	PieChartBytesDstOutput string
+	TZ                     string
 }
 type highchartsData struct {
 	Exporter  string
@@ -46,7 +54,7 @@ func renderTimeseriesChartJS(w http.ResponseWriter, r *http.Request) {
 	var data = FillDataFromPath(r)
 	data.Container = "chart_snmptraffic"
 
-	tmpl, err := t.ParseFiles("./static/charts.timeseries.gotmpl.js")
+	tmpl, err := t.ParseFiles("./static/templates/charts.timeseries.gotmpl.js")
 	if err != nil {
 		log.Println(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -70,7 +78,7 @@ func highcharts(w http.ResponseWriter, r *http.Request) {
 	startEpoch, _ := strconv.ParseInt(startStr, 10, 64)
 	//endEpoch, _ := strconv.ParseInt(endStr, 10, 64)
 	start := time.Unix(startEpoch, 0)
-	tmpl, err := template.ParseFiles("./static/charts.gotmpl.js")
+	tmpl, err := template.ParseFiles("./static/templates/charts.gotmpl.js")
 	if err != nil {
 		log.Fatalf("Error parsing template: %v", err)
 	}
@@ -121,14 +129,38 @@ func FillDataFromPath(r *http.Request) MainPageData {
 	}
 	log.Println("start: ", start)
 	log.Println("end : ", end)
-	metrics, err := getInterfacesMetrics(exporterStr, interfaceStr, start, end)
+	input_or_output := r.PathValue("direction")
+	if input_or_output == "" {
+		input_or_output = "input"
+	}
+	src_or_dst := r.PathValue("src_or_dst")
+	if src_or_dst == "" {
+		src_or_dst = "src"
+	}
+	pkts_or_bytes := r.PathValue("bytes_packets_flow")
+	if pkts_or_bytes == "" {
+		pkts_or_bytes = "bytes"
+	}
+	container := r.PathValue("container")
+
+	log.Println("Container: ", container)
+	exporters, _ := getExporterList()
+	exporterId, _ := strconv.ParseInt(exporterStr, 10, 64)
+	exporterIp := exporters[int(exporterId)].IP_Inet
+	metrics, err := getInterfacesMetrics(fmt.Sprint(exporterId), interfaceStr, start, end)
 	if err != nil {
 		log.Println(err.Error())
 	}
+
 	var data = MainPageData{
+		Container:         container,
+		SrcOrDst:          src_or_dst,
+		PktsOrBytes:       pkts_or_bytes,
+		InputOrOutput:     input_or_output,
 		TZ:                config.TZ,
 		PostgrestUrl:      config.Dbrest,
 		Exporter:          exporterStr,
+		ExporterIp:        exporterIp,
 		Interface:         interfaceStr,
 		Start:             start,
 		End:               end,
@@ -149,12 +181,25 @@ func FillDataFromPath(r *http.Request) MainPageData {
 	}
 	return data
 }
-
+func renderPieChartJS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	data := FillDataFromPath(r)
+	tmpl, err := template.ParseFiles("./static/templates/charts.pie.gotmpl.js")
+	if err != nil {
+		log.Println(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = tmpl.Execute(w, data)
+}
 func mainPageHighcharts(w http.ResponseWriter, r *http.Request) {
 	var data = FillDataFromPath(r)
-	tmpl, err := template.ParseFiles("./static/body.js.gotmpl.html")
+	tmpl, err := template.ParseFiles("./static/templates/body.js.gotmpl.html")
 	if err != nil {
-		log.Fatalf("Error parsing template: %v", err)
+		log.Println(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	err = tmpl.Execute(w, data)
@@ -165,7 +210,7 @@ func mainPageHighcharts(w http.ResponseWriter, r *http.Request) {
 
 func mainPagePNG(w http.ResponseWriter, r *http.Request) {
 	var data MainPageData = FillDataFromPath(r)
-	tmpl, err := template.ParseFiles("./static/body.png.gotmpl.html")
+	tmpl, err := template.ParseFiles("./static/templates/body.png.gotmpl.html")
 	if err != nil {
 		log.Fatalf("Error parsing template: %v", err)
 	}

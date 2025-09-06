@@ -1,0 +1,49 @@
+
+<div class="main-content">
+    <h1>Welcome to Our Website</h1>
+    <p>This is the main content area. The left column contains a navigation list that you can customize with your own links and content.</p>
+    <p>You can add more content here as needed for your website.</p>
+    <!-- HTML5 date picker -->
+    <label for="end-datetime">Start date</label>
+    <input
+            type="datetime-local"
+            id="start-datetime"
+            name="start-date"
+            value="{{.StartInputValue}}"
+            step="300"
+    />
+    <label for="end-datetime">End date</label>
+    <input
+            type="datetime-local"
+            id="end-datetime"
+            name="end-datetime"
+            value="{{.EndInputValue}}"
+            step="300"
+    />
+    <h1>Traffic rate</h1>
+    <div class="timeseries" id="chart_snmptraffic"></div>
+    <hr>
+    <h1>Bytes</h1>
+    <div class="pie" id="flowsrcbytesinput"></div>
+    <div class="pie" id="flowdstbytesinput"></div>
+    <div class="pie" id="flowsrcbytesoutput"></div>
+    <div class="pie" id="flowdstbytesoutput"></div>
+    <hr>
+    <br/>
+    <h1>Packets</h1>
+    <div class="pie" id="flowsrcpktsinput"></div>
+    <div class="pie" id="flowdstpktsinput"></div>
+    <div class="pie" id="flowsrcpktsoutput"></div>
+    <div class="pie" id="flowdstpktsoutput"></div>
+
+</div>
+<script src="./api/v1/metrics/{{.Container}}/{{.Exporter}}/{{.Interface}}/{{.StartUnix}}/{{.EndUnix}}/js"></script>
+<script src="./api/v1/flows/flowsrcbytesinput/{{.ExporterIp}}/{{.Interface}}/{{.StartUnix}}/{{.EndUnix}}/src/total_octets/input/js"></script>
+<script src="./api/v1/flows/flowdstbytesinput/{{.ExporterIp}}/{{.Interface}}/{{.StartUnix}}/{{.EndUnix}}/dst/total_octets/input/js"></script>
+<script src="./api/v1/flows/flowsrcbytesoutput/{{.ExporterIp}}/{{.Interface}}/{{.StartUnix}}/{{.EndUnix}}/src/total_octets/output/js"></script>
+<script src="./api/v1/flows/flowdstbytesoutput/{{.ExporterIp}}/{{.Interface}}/{{.StartUnix}}/{{.EndUnix}}/dst/total_octets/output/js"></script>
+
+<script src="./api/v1/flows/flowsrcpktsinput/{{.ExporterIp}}/{{.Interface}}/{{.StartUnix}}/{{.EndUnix}}/src/total_packets/input/js"></script>
+<script src="./api/v1/flows/flowdstpktsinput/{{.ExporterIp}}/{{.Interface}}/{{.StartUnix}}/{{.EndUnix}}/dst/total_packets/input/js"></script>
+<script src="./api/v1/flows/flowsrcpktsoutput/{{.ExporterIp}}/{{.Interface}}/{{.StartUnix}}/{{.EndUnix}}/src/total_packets/output/js"></script>
+<script src="./api/v1/flows/flowdstpktsoutput/{{.ExporterIp}}/{{.Interface}}/{{.StartUnix}}/{{.EndUnix}}/dst/total_packets/output/js"></script>

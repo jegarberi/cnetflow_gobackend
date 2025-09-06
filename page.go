@@ -185,7 +185,7 @@ func renderPieChartJS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	data := FillDataFromPath(r)
-	tmpl, err := template.ParseFiles("./static/templates/charts.pie.gotmpl.js")
+	tmpl, err := t.ParseFiles("./static/templates/charts.pie.gotmpl.js")
 	if err != nil {
 		log.Println(err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
@@ -195,7 +195,7 @@ func renderPieChartJS(w http.ResponseWriter, r *http.Request) {
 }
 func mainPageHighcharts(w http.ResponseWriter, r *http.Request) {
 	var data = FillDataFromPath(r)
-	tmpl, err := template.ParseFiles("./static/templates/body.js.gotmpl.html")
+	tmpl, err := t.ParseFiles("./static/templates/body.js.gotmpl.html")
 	if err != nil {
 		log.Println(err.Error())
 		w.WriteHeader(http.StatusInternalServerError)

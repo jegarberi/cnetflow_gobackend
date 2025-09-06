@@ -1,4 +1,14 @@
 chart_{{.Container}} = Highcharts.chart('{{.Container}}', {
+    legend: {
+        layout: 'vertical',
+        verticalAlign: 'middle',
+        align: 'right',
+        symbolRadius: 2,
+        useHTML: true,
+        labelFormatter: function() {
+            return `<span style="min-width: 250px; display:inline-block; border-bottom: 1px solid #ccc;"><span style="float:left; font-size:14px; font-weight:normal" >${this.name}</span><span style="float:right">${this.y}</span></span>`
+        }
+    },
     chart: {
         type: 'pie',
         zooming: {
@@ -24,6 +34,7 @@ chart_{{.Container}} = Highcharts.chart('{{.Container}}', {
         pie: {
             allowPointSelect: true,
             cursor: 'pointer',
+            showInLegend: true,
             dataLabels: [{
                 enabled: true,
                 distance: 20
@@ -49,8 +60,19 @@ chart_{{.Container}} = Highcharts.chart('{{.Container}}', {
 });
 timeout_{{.Container}}  = setTimeout(function(){
     $.getJSON('{{.PostgrestUrl}}flows_v9_agg_5min?select={{.SrcOrDst}}addr,{{.PktsOrBytes}}.sum()&exporter=eq.{{.Exporter}}&{{.InputOrOutput}}=eq.{{.Interface}}&bucket_5min=gt.{{.StartInputValue}}&bucket_5min=lt.{{.EndInputValue}}', function(data) {
-        debugger;
+        function compare( a, b ) {
+            if ( a.sum < b.sum ){
+                return 1;
+            }else if ( a.sum > b.sum ){
+                return -1;
+            } else {
+                return 0;
+            }
+        }
+
+        data.sort( compare );
         seriesData = {name: "Input {{.SrcOrDst}}Addr {{.PktsOrBytes}}", colorbypoint: true, data: []};
+
         for (let i in data){
             let newdata = {name: data[i].{{.SrcOrDst}}addr, y: data[i].sum    };
             seriesData.data.push(newdata);

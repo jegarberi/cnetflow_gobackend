@@ -58,27 +58,56 @@ chart_{{.Container}} = Highcharts.chart('{{.Container}}', {
     series: [
     ]
 });
-timeout_{{.Container}}  = setTimeout(function(){
-    $.getJSON('{{.PostgrestUrl}}flows_agg_5min?select={{.SrcOrDst}}addr,{{.PktsOrBytes}}.sum()&exporter=eq.{{.Exporter}}&{{.InputOrOutput}}=eq.{{.Interface}}&bucket_5min=gt.{{.StartInputValue}}&bucket_5min=lt.{{.EndInputValue}}', function(data) {
-        function compare( a, b ) {
-            if ( a.sum < b.sum ){
-                return 1;
-            }else if ( a.sum > b.sum ){
-                return -1;
-            } else {
-                return 0;
-            }
-        }
+timeout_{{.Container}}  = // Main thread: offload sorting and mapping to a Web Worker
+    setTimeout(function () {
+        $.getJSON('{{.PostgrestUrl}}flows_agg_5min?select={{.SrcOrDst}}addr,{{.PktsOrBytes}}.sum()&exporter=eq.{{.Exporter}}&{{.InputOrOutput}}=eq.{{.Interface}}&bucket_5min=gt.{{.StartInputValue}}&bucket_5min=lt.{{.EndInputValue}}', function (data) {
 
-        data.sort( compare );
-        seriesData = {name: "Input {{.SrcOrDst}}Addr {{.PktsOrBytes}}", colorbypoint: true, data: []};
+            // Inline worker script (Blob)
+            const workerCode = `
+            self.onmessage = function(e){
+                const { data, nameKey } = e.data;
 
-        for (let i in data){
-            let newdata = {name: data[i].{{.SrcOrDst}}addr, y: data[i].sum    };
-            seriesData.data.push(newdata);
-        }
-        chart_{{.Container}}.addSeries(seriesData);
+                // Sort descending by sum
+                data.sort((a, b) => (a.sum < b.sum) ? 1 : (a.sum > b.sum ? -1 : 0));
 
-    });
+                // Map to Highcharts series.data format
+                const seriesData = data.map(d => ({
+                    name: d[nameKey],
+                    y: d.sum
+                }));
 
-},100);
+                self.postMessage({ seriesData });
+            };
+        `;
+            const blob = new Blob([workerCode], { type: 'application/javascript' });
+            const worker = new Worker(URL.createObjectURL(blob));
+
+            worker.onmessage = function (e) {
+                const { seriesData } = e.data;
+                const series = {
+                    name: "Input {{.SrcOrDst}}Addr {{.PktsOrBytes}}",
+                    colorByPoint: true,
+                    data: seriesData
+                };
+                chart_{{.Container}}.addSeries(series);
+                worker.terminate();
+            };
+
+            worker.onerror = function () {
+                // Fallback to main-thread processing on error
+                data.sort((a, b) => (a.sum < b.sum) ? 1 : (a.sum > b.sum ? -1 : 0));
+                const series = {
+                    name: "Input {{.SrcOrDst}}Addr {{.PktsOrBytes}}",
+                    colorByPoint: true,
+                    data: data.map(d => ({ name: d['{{.SrcOrDst}}addr'], y: d.sum }))
+                };
+                chart_{{.Container}}.addSeries(series);
+            };
+
+            // Post data to worker with the dynamic key for address column
+            worker.postMessage({
+                data,
+                nameKey: '{{.SrcOrDst}}addr'
+            });
+        });
+    }, 100);

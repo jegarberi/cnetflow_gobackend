@@ -288,8 +288,10 @@
 
         // Smooth via Catmull-Rom spline
         const curve = new THREE.CatmullRomCurve3(points);
+
         curve.tension = 0.5;
         curve.curveType = 'catmullrom';
+
         return curve;
     }
     function createArcPath2(startPos, endPos, arcHeight = 20) {

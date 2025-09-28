@@ -108,7 +108,7 @@ func getFlowsDB(exporter string, last string) ([]FlowGEO, string) {
 			&flow.Last,
 		)
 
-		flow_geo := FlowGEO{}
+		flowGeo := FlowGEO{}
 		if flow.Last.Unix() > max_last.Unix() {
 			max_last = flow.Last
 		}
@@ -122,10 +122,10 @@ func getFlowsDB(exporter string, last string) ([]FlowGEO, string) {
 		}
 		if _, exists := flowsGeo[flow.SrcAddr][flow.DstAddr]; !exists {
 			flowsGeo[flow.SrcAddr][flow.DstAddr] = &FlowGEO{}
-			flow_geo.SrcAddr = flow.SrcAddr
-			flow_geo.DstAddr = flow.SrcAddr
-			flowsGeo[flow.SrcAddr][flow.DstAddr].DstAddr = flow_geo.DstAddr
-			flowsGeo[flow.SrcAddr][flow.DstAddr].SrcAddr = flow_geo.SrcAddr
+			flowGeo.SrcAddr = flow.SrcAddr
+			flowGeo.DstAddr = flow.SrcAddr
+			flowsGeo[flow.SrcAddr][flow.DstAddr].DstAddr = flowGeo.DstAddr
+			flowsGeo[flow.SrcAddr][flow.DstAddr].SrcAddr = flowGeo.SrcAddr
 			flowsGeo[flow.SrcAddr][flow.DstAddr].Packets = flow.DPkts
 			flowsGeo[flow.SrcAddr][flow.DstAddr].Octets = flow.DOctets
 			var record any
@@ -203,7 +203,9 @@ func getFlowsDB(exporter string, last string) ([]FlowGEO, string) {
 			FlowsGEOArray = append(FlowsGEOArray, *f2)
 		}
 	}
-	return FlowsGEOArray, max_last.String()
+	max_last_str := max_last.String()
+	max_last_str = strings.Split(max_last_str, "+")[0]
+	return FlowsGEOArray, max_last_str
 }
 
 func getInterfacesMetricsRequest(w http.ResponseWriter, r *http.Request) {

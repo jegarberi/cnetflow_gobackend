@@ -335,6 +335,7 @@ func getInterfacesRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if format == "combo" {
 		var line = "<select id=\"interfaces\">"
+		line = fmt.Sprintf("%s\n<option value=\"select\">Select Interface</option>", line)
 		for _, interfac := range interfaces {
 			line = fmt.Sprintf("%s\n<option value=\"%d\">[%d] %s %s %s %d </option>", line, interfac.ID, interfac.Snmp_if, interfac.Name, interfac.Descr, interfac.Alias, interfac.Speed)
 		}
@@ -600,6 +601,7 @@ func main() {
 	mux.HandleFunc("/api/v1/body/{exporter}/{interface}/{start}", mainPageHighcharts)
 	mux.HandleFunc("/api/v1/body/{exporter}/{interface}/{start}/{end}", mainPageHighcharts)
 	mux.HandleFunc("/api/v1/interfaces", getInterfacesRequest)
+	mux.HandleFunc("/api/v1/interfaces/{format}", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}", getInterfacesMetricsRequest)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/tag", renderChartTag)
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/{start}/{end}/png", renderTimeseriesChartPNG)

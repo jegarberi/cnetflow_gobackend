@@ -253,11 +253,11 @@
         const end = endPos.clone().normalize().multiplyScalar(peakHeight);
 
         // Build points: surface -> vertical lift -> arc -> vertical down (optional)
-        const segments = 20;
+        const segments = 5;
         const points = [];
 
         // 1) Lift line from surface to arc start (parallel to radial direction)
-        const liftSteps = 10;
+        const liftSteps = 2;
         for (let i = 0; i <= liftSteps; i++) {
             const t = i / liftSteps;
             const p = new THREE.Vector3().lerpVectors(surfaceStart, start, t);
@@ -1310,7 +1310,6 @@
     function draw_flows(){
         var flows = get_flows();
         last = flows.Last;
-        last = last.split("+")[0]
         for (var index in flows["Fdb"]){
             var flow = flows["Fdb"][index];
             const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff];

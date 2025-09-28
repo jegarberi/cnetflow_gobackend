@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"math"
-	"net"
 	"time"
 
 	"github.com/oschwald/maxminddb-golang/v2"
@@ -42,8 +41,8 @@ type Coordinates struct {
 }
 
 type FlowGEO struct {
-	SrcAddr  net.IP
-	DstAddr  net.IP
+	SrcAddr  string
+	DstAddr  string
 	SrcCoord Coordinates
 	DstCoord Coordinates
 	Distance float64
@@ -53,29 +52,31 @@ type FlowGEO struct {
 
 type ReturnStruct struct {
 	Fdb  []FlowGEO
-	Last int64
+	Last string
 }
 
 type FlowDB struct {
-	ID       uint64 `json:"id" db:"id"`
-	SrcAddr  int64  `json:"srcaddr" db:"srcaddr"`
-	DstAddr  int64  `json:"dstaddr" db:"dstaddr"`
-	Input    int64  `json:"input" db:"input"`
-	Output   int64  `json:"output" db:"output"`
-	DPkts    int64  `json:"dpkts" db:"dpkts"`
-	DOctets  int64  `json:"doctets" db:"doctets"`
-	SrcPort  int64  `json:"srcport" db:"srcport"`
-	DstPort  int64  `json:"dstport" db:"dstport"`
-	TCPFlags string `json:"tcp_flags" db:"tcp_flags"`
-	Protocol string `json:"prot" db:"prot"`
-	TOS      string `json:"tos" db:"tos"`
-	SrcAS    int64  `json:"src_as" db:"src_as"`
-	DstAS    int64  `json:"dst_as" db:"dst_as"`
-	SrcMask  string `json:"src_mask" db:"src_mask"`
-	DstMask  string `json:"dst_mask" db:"dst_mask"`
-	Exporter int64  `json:"exporter" db:"exporter"`
-	First    int64  `json:"first" db:"first"`
-	Last     int64  `json:"last" db:"last"`
+	ID         uint64    `json:"id" db:"id"`
+	InsertedAt time.Time `json:"inserted_at" db:"inserted_at"`
+	Exporter   string    `json:"exporter" db:"exporter"`
+	SrcAddr    string    `json:"srcaddr" db:"srcaddr"`
+	DstAddr    string    `json:"dstaddr" db:"dstaddr"`
+	Input      int64     `json:"input" db:"input"`
+	Output     int64     `json:"output" db:"output"`
+	DPkts      int64     `json:"dpkts" db:"dpkts"`
+	DOctets    int64     `json:"doctets" db:"doctets"`
+	SrcPort    int64     `json:"srcport" db:"srcport"`
+	DstPort    int64     `json:"dstport" db:"dstport"`
+	TCPFlags   string    `json:"tcp_flags" db:"tcp_flags"`
+	Protocol   string    `json:"prot" db:"prot"`
+	TOS        string    `json:"tos" db:"tos"`
+	SrcAS      int64     `json:"src_as" db:"src_as"`
+	DstAS      int64     `json:"dst_as" db:"dst_as"`
+	SrcMask    string    `json:"src_mask" db:"src_mask"`
+	DstMask    string    `json:"dst_mask" db:"dst_mask"`
+	IPVersion  string    `json:"ip_version" db:"ip_version"`
+	First      time.Time `json:"first" db:"first"`
+	Last       time.Time `json:"last" db:"last"`
 }
 
 type Exporter struct {

@@ -12,7 +12,8 @@ import (
 	"net/netip"
 	"os"
 	"sort"
-	"strconv"
+	"strings"
+
 	"time"
 
 	_ "github.com/lib/pq" // The underscore is intentional - it's a blank import
@@ -56,17 +57,23 @@ func int64ToIPv4(intIP int64) net.IP {
 
 // TIP <p>To run your code, right-click the code and select <b>Run</b>.</p> <p>Alternatively, click
 // the <icon src="AllIcons.Actions.Execute"/> icon in the gutter and select the <b>Run</b> menu item from here.</p>
-func getFlowsDB(exporter int64, last int64) ([]FlowGEO, int64) {
-	var flowsGeo map[int64]map[int64]*FlowGEO
-	flowsGeo = make(map[int64]map[int64]*FlowGEO)
-	var max_last int64
-	max_last = 0
+func getFlowsDB(exporter string, last string) ([]FlowGEO, string) {
+	var flowsGeo map[string]map[string]*FlowGEO
+	flowsGeo = make(map[string]map[string]*FlowGEO)
+	var max_last time.Time
+
 	var rows *sql.Rows
 	var err error
-	last = 0
-	rows, err = config.Db.Query("select * from flows where exporter = $2 and last >= $1 UNION select * from flows_v5 where exporter = $2 and last >= $1 ", last, exporter)
+	if last == "0" {
+		last = "2000-01-01 00:00:00"
+	}
+	last = strings.Split(last, "+")[0]
+	query := fmt.Sprintf("select * from flows where exporter = $1::inet and last >= $2::timestamp ;  ")
+	log.Println(query)
+	rows, err = config.Db.Query(query, exporter, last)
 	if err != nil {
-		return nil, 0
+		log.Println(err.Error())
+		return nil, "0"
 	}
 	defer func(rows *sql.Rows) {
 		err := rows.Close()
@@ -79,6 +86,8 @@ func getFlowsDB(exporter int64, last int64) ([]FlowGEO, int64) {
 		var flow FlowDB
 		err := rows.Scan(
 			&flow.ID,
+			&flow.InsertedAt,
+			&flow.Exporter,
 			&flow.SrcAddr,
 			&flow.DstAddr,
 			&flow.Input,
@@ -94,41 +103,46 @@ func getFlowsDB(exporter int64, last int64) ([]FlowGEO, int64) {
 			&flow.DstAS,
 			&flow.SrcMask,
 			&flow.DstMask,
-			&flow.Exporter,
+			&flow.IPVersion,
 			&flow.First,
 			&flow.Last,
 		)
 
-		if flow.SrcAddr != 0 && flow.DstAddr != 0 {
-			flow_geo := FlowGEO{}
-			if flow.Last > max_last {
-				max_last = flow.Last
-			}
-
-			if _, exists := flowsGeo[flow.SrcAddr]; !exists {
-				flowsGeo[flow.SrcAddr] = make(map[int64]*FlowGEO)
-			}
-			if _, exists := flowsGeo[flow.SrcAddr][flow.DstAddr]; !exists {
-				flowsGeo[flow.SrcAddr][flow.DstAddr] = &FlowGEO{}
-				flow_geo.SrcAddr = int64ToIPv4(flow.SrcAddr)
-				flow_geo.DstAddr = int64ToIPv4(flow.DstAddr)
-				flowsGeo[flow.SrcAddr][flow.DstAddr].DstAddr = flow_geo.DstAddr
-				flowsGeo[flow.SrcAddr][flow.DstAddr].SrcAddr = flow_geo.SrcAddr
-				flowsGeo[flow.SrcAddr][flow.DstAddr].Packets = flow.DPkts
-				flowsGeo[flow.SrcAddr][flow.DstAddr].Octets = flow.DOctets
-				var record any
-				// Convert to net.IPAddr
-
-				addr, err := netip.ParseAddr(flow_geo.SrcAddr.String())
-				if err != nil {
-					log.Println(err.Error())
-				}
+		flow_geo := FlowGEO{}
+		if flow.Last.Unix() > max_last.Unix() {
+			max_last = flow.Last
+		}
+		if flow.SrcAddr > flow.DstAddr {
+			tmp := flow.SrcAddr
+			flow.SrcAddr = flow.DstAddr
+			flow.DstAddr = tmp
+		}
+		if _, exists := flowsGeo[flow.SrcAddr]; !exists {
+			flowsGeo[flow.SrcAddr] = make(map[string]*FlowGEO)
+		}
+		if _, exists := flowsGeo[flow.SrcAddr][flow.DstAddr]; !exists {
+			flowsGeo[flow.SrcAddr][flow.DstAddr] = &FlowGEO{}
+			flow_geo.SrcAddr = flow.SrcAddr
+			flow_geo.DstAddr = flow.SrcAddr
+			flowsGeo[flow.SrcAddr][flow.DstAddr].DstAddr = flow_geo.DstAddr
+			flowsGeo[flow.SrcAddr][flow.DstAddr].SrcAddr = flow_geo.SrcAddr
+			flowsGeo[flow.SrcAddr][flow.DstAddr].Packets = flow.DPkts
+			flowsGeo[flow.SrcAddr][flow.DstAddr].Octets = flow.DOctets
+			var record any
+			// Convert to net.IPAddr
+			{
+				addr, err := netip.ParseAddr(flow.SrcAddr)
 				//log.Println(addr)
 				err = config.Mmdb.Lookup(addr).Decode(&record)
 				err = config.Mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Latitude, "location", "latitude")
 				err = config.Mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Longitude, "location", "longitude")
+				if err != nil {
+					log.Println(err.Error())
+				}
+			}
+			{
 				//log.Println(record)
-				addr, err = netip.ParseAddr(flow_geo.DstAddr.String())
+				addr, err := netip.ParseAddr(flow.DstAddr)
 				if err != nil {
 					log.Println(err.Error())
 				}
@@ -137,22 +151,23 @@ func getFlowsDB(exporter int64, last int64) ([]FlowGEO, int64) {
 				err = config.Mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Latitude, "location", "latitude")
 				err = config.Mmdb.Lookup(addr).DecodePath(&flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Longitude, "location", "longitude")
 				//log.Println(record)
+			}
 
-			} else {
-				flowsGeo[flow.SrcAddr][flow.DstAddr].Packets = flowsGeo[flow.SrcAddr][flow.DstAddr].Packets + flow.DPkts
-				flowsGeo[flow.SrcAddr][flow.DstAddr].Octets = flowsGeo[flow.SrcAddr][flow.DstAddr].Octets + flow.DOctets
-			}
-			if flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Latitude == 0 && flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Longitude == 0 {
-				flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Latitude = -34.5823511
-				flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Longitude = -58.6027697
-			}
-			if flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Latitude == 0 && flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Longitude == 0 {
-				flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Latitude = -34.5823511
-				flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Longitude = -58.6027697
-			}
-			flowsGeo[flow.SrcAddr][flow.DstAddr].Distance = flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.HaversineMeters(flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord)
-			//fmt.Println(flowsGeo[flow.SrcAddr][flow.DstAddr].Distance)
+		} else {
+			flowsGeo[flow.SrcAddr][flow.DstAddr].Packets = flowsGeo[flow.SrcAddr][flow.DstAddr].Packets + flow.DPkts
+			flowsGeo[flow.SrcAddr][flow.DstAddr].Octets = flowsGeo[flow.SrcAddr][flow.DstAddr].Octets + flow.DOctets
 		}
+		if flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Latitude == 0 && flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Longitude == 0 {
+			flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Latitude = -34.5823511
+			flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.Longitude = -58.6027697
+		}
+		if flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Latitude == 0 && flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Longitude == 0 {
+			flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Latitude = -34.5823511
+			flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord.Longitude = -58.6027697
+		}
+		flowsGeo[flow.SrcAddr][flow.DstAddr].Distance = flowsGeo[flow.SrcAddr][flow.DstAddr].SrcCoord.HaversineMeters(flowsGeo[flow.SrcAddr][flow.DstAddr].DstCoord)
+		//fmt.Println(flowsGeo[flow.SrcAddr][flow.DstAddr].Distance)
+
 		if err != nil {
 			log.Println(err.Error())
 		}
@@ -188,7 +203,7 @@ func getFlowsDB(exporter int64, last int64) ([]FlowGEO, int64) {
 			FlowsGEOArray = append(FlowsGEOArray, *f2)
 		}
 	}
-	return FlowsGEOArray, max_last
+	return FlowsGEOArray, max_last.String()
 }
 
 func getInterfacesMetricsRequest(w http.ResponseWriter, r *http.Request) {
@@ -519,21 +534,13 @@ func getFlowsRequest(w http.ResponseWriter, r *http.Request) {
 	rs := ReturnStruct{}
 	w.Header().Set("Content-Type", "application/json")
 	lastStr := r.PathValue("last")
-	last, err := strconv.ParseInt(lastStr, 10, 64)
-	if err != nil {
-		//log.Println(err.Error())
-		last = 0
-	}
+
 	exporterStr := r.PathValue("exporter")
-	exporter, err := strconv.ParseInt(exporterStr, 10, 64)
-	if err != nil {
-		//log.Println(err.Error())
-		exporter = 0
-	}
-	rs.Fdb, last = getFlowsDB(exporter, last)
+
+	rs.Fdb, lastStr = getFlowsDB(exporterStr, lastStr)
 
 	//rs.Last = time.Now().Unix()
-	rs.Last = last
+	rs.Last = lastStr
 	jsonBytes, err := json.Marshal(rs)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

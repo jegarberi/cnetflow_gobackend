@@ -43,7 +43,7 @@
 
     <div style="margin-bottom: 10px;">
         <label>Exporter: </label>
-        <label for="exporterInput"></label><input id="exporterInput" style="margin-left: 5px;" type="text" value="-1062706175">
+        <label for="exporterInput"></label><input id="exporterInput" style="margin-left: 5px;" type="text" value="192.168.100.1">
     </div>
     <div style="margin-bottom: 10px;">
         <label>Time (UTC): </label>
@@ -137,6 +137,7 @@
 </div>
 
 <script type="module">
+    var last = "0";
     import * as THREE from 'three';
     import {OrbitControls} from './js/OrbitControls.js';
 
@@ -211,6 +212,85 @@
         curvePath.add(new THREE.LineCurve3(pathPoints[2], pathPoints[3])); // Straight down
 
         return curvePath;
+    }
+    function createCirclePath2(startPos, endPos, arcHeight = 20) {
+        const globeRadius = 50;
+        const peakHeight = globeRadius + arcHeight; // constant altitude above globe
+
+        // Ensure start/end are on globe surface and copy them
+        const start = startPos.clone().normalize().multiplyScalar(peakHeight);
+        const end = endPos.clone().normalize().multiplyScalar(peakHeight);
+
+        // Create points along the great-circle-like path at constant radius
+        const segments = 10;
+        const points = [];
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            // Linear interpolate in Cartesian space...
+            const p = new THREE.Vector3().lerpVectors(start, end, t);
+            // ...then project back to the constant radius to stay parallel to globe
+            p.normalize().multiplyScalar(peakHeight);
+            points.push(p);
+        }
+
+        // Smooth via Catmull-Rom spline
+        const curve = new THREE.CatmullRomCurve3(points);
+        curve.tension = 0.5;
+        curve.curveType = 'catmullrom';
+        return curve;
+    }
+    // JavaScript
+    function createCirclePath3(startPos, endPos, arcHeight = 20) {
+        const globeRadius = 50;
+        const peakHeight = globeRadius + arcHeight; // constant altitude above globe
+
+        // Surface points on the globe
+        const surfaceStart = startPos.clone().normalize().multiplyScalar(globeRadius);
+        const surfaceEnd = endPos.clone().normalize().multiplyScalar(globeRadius);
+
+        // Start/end points of the arc at constant altitude
+        const start = startPos.clone().normalize().multiplyScalar(peakHeight);
+        const end = endPos.clone().normalize().multiplyScalar(peakHeight);
+
+        // Build points: surface -> vertical lift -> arc -> vertical down (optional)
+        const segments = 20;
+        const points = [];
+
+        // 1) Lift line from surface to arc start (parallel to radial direction)
+        const liftSteps = 10;
+        for (let i = 0; i <= liftSteps; i++) {
+            const t = i / liftSteps;
+            const p = new THREE.Vector3().lerpVectors(surfaceStart, start, t);
+            points.push(p);
+        }
+
+        // 2) Arc at constant altitude between start and end
+        for (let i = 1; i <= segments; i++) {
+            const t = i / segments;
+            const p = new THREE.Vector3().lerpVectors(start, end, t);
+            p.normalize().multiplyScalar(peakHeight);
+            points.push(p);
+        }
+        for (let i = 0; i <= liftSteps; i++) {
+            const t = i / liftSteps;
+            const p = new THREE.Vector3().lerpVectors(end, surfaceEnd, t);
+            points.push(p);
+        }
+        // If you also want a landing line down to the surface at the end, uncomment:
+        /*
+        const landSteps = 8;
+        for (let i = 1; i <= landSteps; i++) {
+            const t = i / landSteps;
+            const p = new THREE.Vector3().lerpVectors(end, surfaceEnd, t);
+            points.push(p);
+        }
+        */
+
+        // Smooth via Catmull-Rom spline
+        const curve = new THREE.CatmullRomCurve3(points);
+        curve.tension = 0.5;
+        curve.curveType = 'catmullrom';
+        return curve;
     }
     function createArcPath2(startPos, endPos, arcHeight = 20) {
         const distance = startPos.distanceTo(endPos);
@@ -298,7 +378,7 @@
             this.currentProgress = 0;
 
             // Create the arc curve
-            this.curve = createArcPath2(this.startPos, this.endPos, this.arcHeight);
+            this.curve = createCirclePath3(this.startPos, this.endPos, 10);
 
             // Create the arc visual elements
             this.createArcVisual();
@@ -1217,7 +1297,7 @@
     // Initialize with current time
     updateSunAndEarth(now);
     updateInfo(now);
-    var last = 0;
+
     function get_flows(){
     	var exporter = document.getElementById('exporterInput').value;
         var xmlHttp = new XMLHttpRequest();
@@ -1230,6 +1310,7 @@
     function draw_flows(){
         var flows = get_flows();
         last = flows.Last;
+        last = last.split("+")[0]
         for (var index in flows["Fdb"]){
             var flow = flows["Fdb"][index];
             const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff];

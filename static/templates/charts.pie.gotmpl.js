@@ -59,7 +59,7 @@ chart_{{.Container}} = Highcharts.chart('{{.Container}}', {
     ]
 });
 timeout_{{.Container}}  = setTimeout(function(){
-    $.getJSON('{{.PostgrestUrl}}flows_v9_agg_5min?select={{.SrcOrDst}}addr,{{.PktsOrBytes}}.sum()&exporter=eq.{{.Exporter}}&{{.InputOrOutput}}=eq.{{.Interface}}&bucket_5min=gt.{{.StartInputValue}}&bucket_5min=lt.{{.EndInputValue}}', function(data) {
+    $.getJSON('{{.PostgrestUrl}}flows_agg_5min?select={{.SrcOrDst}}addr,{{.PktsOrBytes}}.sum()&exporter=eq.{{.Exporter}}&{{.InputOrOutput}}=eq.{{.Interface}}&bucket_5min=gt.{{.StartInputValue}}&bucket_5min=lt.{{.EndInputValue}}', function(data) {
         function compare( a, b ) {
             if ( a.sum < b.sum ){
                 return 1;

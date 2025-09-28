@@ -16,11 +16,19 @@
     <script type="importmap">
         {
           "imports": {
-            "three": "./three.module.js",
+            "three": "./js/three.module.js"
+          }
+        }
+
+    </script>
+    <!--
+    {
+          "imports": {
+            "three": "./js/three.module.js",
             "three/examples/": "https://cdn.jsdelivr.net/npm/three@0.154.0/examples/jsm/"
           }
         }
-    </script>
+    -->
 </head>
 <body>
 <!-- Add these controls in the body -->
@@ -144,7 +152,7 @@
     controls.enableDamping = true;
 
     const textureLoader = new THREE.TextureLoader();
-    const earthColor = textureLoader.load('./earth-blue-marble.jpg');
+    const earthColor = textureLoader.load('./img/earth-blue-marble.jpg');
 
     let globe = new THREE.Mesh(
         new THREE.SphereGeometry(50, 64, 64),

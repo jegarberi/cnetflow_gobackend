@@ -64,7 +64,7 @@ func getFlowsDB(exporter int64, last int64) ([]FlowGEO, int64) {
 	var rows *sql.Rows
 	var err error
 	last = 0
-	rows, err = config.Db.Query("select * from flows_v9 where exporter = $2 and last >= $1 UNION select * from flows_v5 where exporter = $2 and last >= $1 ", last, exporter)
+	rows, err = config.Db.Query("select * from flows where exporter = $2 and last >= $1 UNION select * from flows_v5 where exporter = $2 and last >= $1 ", last, exporter)
 	if err != nil {
 		return nil, 0
 	}
@@ -232,10 +232,10 @@ func getInterfacesMetrics(exporter string, interfac string, start time.Time, end
 	var metrics []Metric
 	log.Println("start: ", start)
 	log.Println("end : ", end)
-	log.Println("start: ", start.String())
-	log.Println("end : ", end.String())
+	log.Println("start: ", start.Format("2006-01-02T15:04"))
+	log.Println("end : ", start.Format("2006-01-02T15:04"))
 
-	rows, err = config.Db.Query("select inserted_at,octets_in,octets_out from interface_metrics where exporter = $1 and snmp_index = $2 and (inserted_at >= $3 and inserted_at <= $4 )", exporter, interfac, start.String(), end.String())
+	rows, err = config.Db.Query("select inserted_at,octets_in,octets_out from interface_metrics where exporter = $1 and snmp_index = $2 and (inserted_at >= $3 and inserted_at <= $4 )", exporter, interfac, start.Format("2006-01-02T15:04"), end.Format("2006-01-02T15:04"))
 	if err != nil {
 		return nil, err
 	}
@@ -281,8 +281,15 @@ func getInterfacesMetrics(exporter string, interfac string, start time.Time, end
 }
 
 func getInterfacesRequest(w http.ResponseWriter, r *http.Request) {
-
+	format := r.PathValue("format")
 	exporterStr := r.PathValue("exporter")
+	r.ParseForm()
+	if exporterStr == "" {
+		exporterStr = r.FormValue("exporter")
+	}
+	if format == "" {
+		format = r.FormValue("format")
+	}
 	log.Println(exporterStr)
 	interfaces, err := getInterfacesList(exporterStr)
 	sort.Slice(interfaces, func(i, j int) bool {
@@ -293,13 +300,30 @@ func getInterfacesRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	for _, interfac := range interfaces {
+	if format == "list" || format == "" {
 		var line = ""
-		//line = fmt.Sprintf("<li hx-swap=\"innerHTML\" hx-target=\"#chart\" hx-post=\"./api/v1/metrics/%s/%d/tag\" id=\"%d\">[%d] %s %s %s %d </li>\n", interfac.Exporter, interfac.Snmp_if, interfac.ID, interfac.Snmp_if, interfac.Name, interfac.Descr, interfac.Alias, interfac.Speed)
-		line = fmt.Sprintf("<li hx-swap=\"innerHTML\" hx-target=\"#body\" hx-post=\"./api/v1/body/%s/%d\" id=\"%d\">[%d] %s %s %s %d </li>\n", interfac.Exporter, interfac.Snmp_if, interfac.ID, interfac.Snmp_if, interfac.Name, interfac.Descr, interfac.Alias, interfac.Speed)
+		for _, interfac := range interfaces {
+			//line = fmt.Sprintf("<li hx-swap=\"innerHTML\" hx-target=\"#chart\" hx-post=\"./api/v1/metrics/%s/%d/tag\" id=\"%d\">[%d] %s %s %s %d </li>\n", interfac.Exporter, interfac.Snmp_if, interfac.ID, interfac.Snmp_if, interfac.Name, interfac.Descr, interfac.Alias, interfac.Speed)
+			line = fmt.Sprintf("%s<li hx-swap=\"innerHTML\" hx-target=\"#body\" hx-post=\"./api/v1/body/%s/%d\" id=\"%d\">[%d] %s %s %s %d </li>\n", line, interfac.Exporter, interfac.Snmp_if, interfac.ID, interfac.Snmp_if, interfac.Name, interfac.Descr, interfac.Alias, interfac.Speed)
+		}
 		fmt.Fprintf(w, line)
-
+		return
+	} else if format == "json" {
+		bytes, err := json.Marshal(interfaces)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+		}
+		fmt.Fprintf(w, string(bytes))
+		return
+	} else if format == "combo" {
+		var line = "<select id=\"interfaces\">"
+		for _, interfac := range interfaces {
+			line = fmt.Sprintf("%s\n<option value=\"%d\">[%d] %s %s %s %d </option>", line, interfac.ID, interfac.Snmp_if, interfac.Name, interfac.Descr, interfac.Alias, interfac.Speed)
+		}
+		line = fmt.Sprintf("%s\n</select>\n", line)
+		fmt.Fprintf(w, line)
+		return
 	}
 
 }
@@ -443,6 +467,7 @@ func getExporterList() (map[int]Exporter, error) {
 func getExportersRequest(w http.ResponseWriter, r *http.Request) {
 
 	//w.Header().Set("Content-Type", "application/json")
+	format := r.PathValue("format")
 
 	exporters, err := getExporterList()
 	/*sort.Slice(exporters, func(i, j int) bool {
@@ -452,9 +477,30 @@ func getExportersRequest(w http.ResponseWriter, r *http.Request) {
 		log.Println(err.Error())
 	}
 	log.Println(exporters)
-	for _, exporter := range exporters {
+	if format == "list" || format == "" {
 		var line = ""
-		line = fmt.Sprintf("<li id=\"%d\" hx-post=\"./api/v1/interfaces/%d\" hx-target=\"#interfaces\">%s [%s]</li>\n", exporter.ID, exporter.ID, exporter.Name, exporter.IP_Inet)
+		for _, exporter := range exporters {
+			line = fmt.Sprintf("%s<li id=\"%d\" hx-post=\"./api/v1/interfaces/%d\" hx-target=\"#interfaces_div\">%s [%s]</li>\n", line, exporter.ID, exporter.ID, exporter.Name, exporter.IP_Inet)
+		}
+		fmt.Fprintf(w, line)
+	} else if format == "json" {
+		bytes, err := json.Marshal(exporters)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(bytes)
+	} else if format == "combo" {
+		var line = "<select name=\"exporter\" hx-get=\"/api/v1/interfaces\" hx-target=\"#interfaces_div\" hx-indicator=\".htmx-indicator\" id=\"exporters\">"
+		line = fmt.Sprintf("%s\n<option value=\"%d\">%s</option>", line, 0, "select exporter")
+		for _, exporter := range exporters {
+			line = fmt.Sprintf("%s\n<option value=\"%d\">[%d] %s %s</option>", line, exporter.ID, exporter.ID, exporter.Name, exporter.IP_Inet)
+		}
+
+		line = fmt.Sprintf("%s\n</select>\n", line)
+		log.Println(line)
 		fmt.Fprintf(w, line)
 	}
 	/*jsonBytes, err := json.Marshal(exporters)
@@ -555,8 +601,9 @@ func main() {
 	mux.HandleFunc("/api/v1/flows/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/js", renderPieChartJS)
 	mux.HandleFunc("/api/v1/flows/{container}/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/js", renderPieChartJS)
 
-	mux.HandleFunc("/api/v1/interfaces/{exporter}", getInterfacesRequest)
-	mux.HandleFunc("/api/v1/exporters/list", getExportersRequest)
+	mux.HandleFunc("/api/v1/interfaces/{exporter}/{format}", getInterfacesRequest)
+	mux.HandleFunc("/api/v1/exporters/{format}", getExportersRequest)
+
 	mux.HandleFunc("/api/v1/flows/{exporter}", getFlowsRequest)
 	mux.HandleFunc("/api/v1/flows/{exporter}/{last}", getFlowsRequest)
 	mux.HandleFunc("/api/v1/query/{path...}", handleQueryRequest)

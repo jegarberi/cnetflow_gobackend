@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Page with Left Column List</title>
+    <!--
     <style>
         html {
             background-color: #141414;
@@ -153,8 +154,11 @@
                 min-width: unset;
             }
         }
+
     </style>
+    -->
     <noscript>Estamos en 2025, habilita javascript!</noscript>
+
     <script src="js/jquery-3.7.1.min.js"></script>
     <script src="js/highcharts.js"></script>
     <script src="js/drilldown.js"></script>
@@ -172,21 +176,67 @@
 <body>
 <div class="container">
     <div class="left-column">
+        <div style="float: left;">Totals</div>
+        <div style="float: left;"> | </div>
+        <div style="float: left;">IP Conversations</div>
+        <div style="float: left;"> | </div>
+        <div style="float: left;">IP-Port Conversations</div>
+        <div style="float: left;"> | </div>
+        <div style="float: left;">IP-Protocol Conversations</div>
+        <br/>
         <h3>Exporters</h3>
-        <ul>
-            <li><a href="#home">Home</a></li>
-            <div hx-get="/api/v1/exporters/list" hx-trigger="load"></div>
-        </ul>
+        <div hx-get="/api/v1/exporters/combo" hx-trigger="load">
+            <img class="htmx-indicator" width="20" src="/img/bars.svg">
+        </div>
     </div>
     <div class="center-column">
         <h3>Interfaces</h3>
-        <div id="interfaces">
+        <div id="interfaces_div" hx-get="/api/v1/interfaces/" hx-vals='{}' hx-trigger="load">
+            <img class="htmx-indicator" width="20" src="/img/bars.svg">
         </div>
     </div>
     <div id="body">
     </div>
 
 </div>
+<script>
 
+    function getExporter() {
+        debugger;
+        exporterid = exporters.options.item( exporters.options.selectedIndex).value;
+        console.log(exporterid);
+        return exporterid;
+    }
+        function getInterface() {
+        debugger;
+        interfaceid = interfaces.options.item(interfaces.options.selectedIndex).value;
+        console.log(interfaceid);
+        return interfaceid
+    }
+
+    /*
+    t = setTimeout(function(){
+        exporterId = exporters.options.item( exporters.options.selectedIndex).value;
+        fetch('/api/v1/interfaces/' + exporterId+'/combo').then(data => {
+            // When the page is loaded convert it to text
+            return data.text()
+        }).then(data => {
+            console.log(data);
+            interfaces_div.innerHTML = data;
+        });
+        u = setTimeout(function(){
+            interfaceId = interfaces.options.item(interfaces.options.selectedIndex).value;
+            fetch('/api/v1/body/' + exporterId + '/' + interfaceId).then(data => {
+                return data.text()
+            }).then(data => {
+                console.log(data);
+                body.innerHTML = data;
+            })
+
+        },1);
+    },100);
+    */
+
+</script>
 </body>
 </html>

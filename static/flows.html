@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetFlow Flows Viewer</title>
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 10px;
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .filter-group button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+
+        .filter-group button:hover {
+            background-color: #0056b3;
+        }
+
+        .filter-group button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 8px;
+            color: white;
+        }
+
+        .stat-card:nth-child(2) {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .stat-card:nth-child(3) {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .stat-card:nth-child(4) {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-bottom: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        thead {
+            background-color: #007bff;
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        th {
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            border-right: 1px solid rgba(255,255,255,0.2);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        th:hover {
+            background-color: #0056b3;
+        }
+
+        th:last-child {
+            border-right: none;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #e0e0e0;
+            transition: background-color 0.2s;
+        }
+
+        tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        td {
+            padding: 10px 8px;
+            color: #333;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 16px;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+        }
+
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .auto-refresh input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .refresh-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-input {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .badge-output {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 15px;
+            color: #007bff;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="/" class="back-link">← Back to Home</a>
+
+    <h1>🌐 NetFlow Aggregated Flows (5-min buckets)</h1>
+
+    <div class="filters">
+        <div class="filter-group">
+            <label for="exporterSelect">Exporter *</label>
+            <select id="exporterSelect">
+                <option value="">Loading...</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="interfaceSelect">Interface *</label>
+            <select id="interfaceSelect" disabled>
+                <option value="">Select exporter first</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="directionSelect">Direction</label>
+            <select id="directionSelect">
+                <option value="input">Input</option>
+                <option value="output">Output</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="srcDstSelect">Src/Dst</label>
+            <select id="srcDstSelect">
+                <option value="src">Source</option>
+                <option value="dst">Destination</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="metricSelect">Metric</label>
+            <select id="metricSelect">
+                <option value="total_octets">Bytes</option>
+                <option value="total_packets">Packets</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="startDateTime">Start Time</label>
+            <input type="datetime-local" id="startDateTime">
+        </div>
+
+        <div class="filter-group">
+            <label for="endDateTime">End Time</label>
+            <input type="datetime-local" id="endDateTime">
+        </div>
+
+        <div class="filter-group">
+            <label for="limitInput">Limit</label>
+            <select id="limitInput">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="250">250</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="searchInput">Search IP</label>
+            <input type="text" id="searchInput" placeholder="192.168.1.1">
+        </div>
+
+        <div class="filter-group">
+            <label for="srcAddrFilter">Source Address</label>
+            <input type="text" id="srcAddrFilter" placeholder="e.g., 10.0.0.1">
+        </div>
+
+        <div class="filter-group">
+            <label for="dstAddrFilter">Destination Address</label>
+            <input type="text" id="dstAddrFilter" placeholder="e.g., 192.168.1.1">
+        </div>
+
+        <div class="filter-group">
+            <label for="protocolFilter">Protocol</label>
+            <select id="protocolFilter">
+                <option value="">All Protocols</option>
+                <option value="1">ICMP (1)</option>
+                <option value="6">TCP (6)</option>
+                <option value="17">UDP (17)</option>
+                <option value="47">GRE (47)</option>
+                <option value="50">ESP (50)</option>
+                <option value="51">AH (51)</option>
+                <option value="58">ICMPv6 (58)</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="srcPortFilter">Source Port</label>
+            <input type="number" id="srcPortFilter" placeholder="e.g., 80" min="0" max="65535">
+            <select id="srcPortServiceFilter" style="display:none;">
+                <option value="">-- Or select service --</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="dstPortFilter">Destination Port</label>
+            <input type="number" id="dstPortFilter" placeholder="e.g., 443" min="0" max="65535">
+            <select id="dstPortServiceFilter" style="display:none;">
+                <option value="">-- Or select service --</option>
+            </select>
+        </div>
+
+        <div class="filter-group" style="justify-content: flex-end;">
+            <label>&nbsp;</label>
+            <button id="loadBtn">Load Flows</button>
+        </div>
+
+        <div class="filter-group auto-refresh" style="justify-content: flex-end;">
+            <label>
+                <input type="checkbox" id="autoRefresh">
+                Auto-refresh (30s)
+            </label>
+            <span id="refreshIndicator" style="display: none;" class="refresh-indicator"></span>
+        </div>
+
+        <div class="filter-group" style="justify-content: flex-end;">
+            <label>
+                <input type="checkbox" id="showExtraColumns">
+                Show Port/Protocol
+            </label>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-label">Total Flows</div>
+            <div class="stat-value" id="totalFlows">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Unique Addresses</div>
+            <div class="stat-value" id="uniqueAddrs">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Volume</div>
+            <div class="stat-value" id="totalVolume">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Last Updated</div>
+            <div class="stat-value" id="lastUpdate" style="font-size: 18px;">-</div>
+        </div>
+    </div>
+
+    <div id="errorContainer"></div>
+
+    <div class="table-container">
+        <table id="flowsTable">
+            <thead>
+            <tr>
+                <th>#</th>
+                <th>Address</th>
+                <th class="extra-column" style="display: none;">Src Port</th>
+                <th class="extra-column" style="display: none;">Dst Port</th>
+                <th class="extra-column" style="display: none;">Protocol</th>
+                <th>Volume</th>
+                <th>Percentage</th>
+            </tr>
+            </thead>
+            <tbody id="flowsBody">
+            <tr>
+                <td colspan="7" class="loading">Configure filters and click "Load Flows"</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let autoRefreshInterval = null;
+    let currentConfig = null;
+    let postgrestUrl = '';
+    let allExporters = {};
+    let allInterfaces = {};
+    let allServices = [];
+
+    // Initialize with default times (last hour)
+    function initializeTimes() {
+        const now = new Date();
+        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+        document.getElementById('startDateTime').value = formatDateTimeLocal(oneHourAgo);
+        document.getElementById('endDateTime').value = formatDateTimeLocal(now);
+    }
+
+    function formatDateTimeLocal(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+
+    // Format bytes to human readable
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Format number with commas
+    function formatNumber(num) {
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    // Show error message
+    function showError(message) {
+        const errorContainer = document.getElementById('errorContainer');
+        errorContainer.innerHTML = `<div class="error"><strong>Error:</strong> ${message}</div>`;
+        setTimeout(() => {
+            errorContainer.innerHTML = '';
+        }, 8000);
+    }
+
+    // Load PostgREST URL from config
+    async function loadConfig() {
+        try {
+            // Try to get from a config endpoint or use environment variable
+            // For now, we'll construct it from the backend
+            postgrestUrl = window.location.origin.replace(':3002', ':3000') + '/';
+            postgrestUrl = 'http://192.168.100.78:3003/';
+            console.log('PostgREST URL:', postgrestUrl);
+
+        } catch (error) {
+            console.error('Error loading config:', error);
+            postgrestUrl = 'http://192.168.100.78:3003/'; // Fallback
+        }
+    }
+
+    // Load exporters
+    async function loadExporters() {
+        try {
+            const response = await fetch('/api/v1/exporters/json');
+            const exporters = await response.json();
+            allExporters = exporters;
+
+            const select = document.getElementById('exporterSelect');
+            select.innerHTML = '<option value="">-- Select Exporter --</option>';
+
+            for (const id in exporters) {
+                const exp = exporters[id];
+                const option = document.createElement('option');
+                option.value = exp.ip_inet;
+                option.dataset.id = id;
+                option.textContent = `${exp.name} [${exp.ip_inet}]`;
+                select.appendChild(option);
+            }
+        } catch (error) {
+            console.error('Error loading exporters:', error);
+            showError('Failed to load exporters: ' + error.message);
+        }
+    }
+
+    // Load services from database
+    async function loadServices() {
+        try {
+            const response = await fetch('/api/v1/services/json');
+            const services = await response.json();
+            allServices = services;
+
+            // Group services by protocol for the port filters
+            const tcpServices = services.filter(s => s.protocol === 6);
+            const udpServices = services.filter(s => s.protocol === 17);
+
+            // Populate source port service filter
+            const srcPortServiceSelect = document.getElementById('srcPortServiceFilter');
+            srcPortServiceSelect.innerHTML = '<option value="">-- Or select service --</option>';
+
+            // Add TCP services
+            if (tcpServices.length > 0) {
+                const tcpGroup = document.createElement('optgroup');
+                tcpGroup.label = 'TCP Services';
+                tcpServices.forEach(svc => {
+                    const option = document.createElement('option');
+                    option.value = svc.port;
+                    option.textContent = `${svc.name} (${svc.port})`;
+                    tcpGroup.appendChild(option);
+                });
+                srcPortServiceSelect.appendChild(tcpGroup);
+            }
+
+            // Add UDP services
+            if (udpServices.length > 0) {
+                const udpGroup = document.createElement('optgroup');
+                udpGroup.label = 'UDP Services';
+                udpServices.forEach(svc => {
+                    const option = document.createElement('option');
+                    option.value = svc.port;
+                    option.textContent = `${svc.name} (${svc.port})`;
+                    udpGroup.appendChild(option);
+                });
+                srcPortServiceSelect.appendChild(udpGroup);
+            }
+
+            // Clone for destination port filter
+            const dstPortServiceSelect = document.getElementById('dstPortServiceFilter');
+            dstPortServiceSelect.innerHTML = srcPortServiceSelect.innerHTML;
+
+            // Show service selects if we have services
+            if (services.length > 0) {
+                srcPortServiceSelect.style.display = 'block';
+                dstPortServiceSelect.style.display = 'block';
+            }
+
+            console.log(`Loaded ${services.length} services from database`);
+        } catch (error) {
+            console.error('Error loading services:', error);
+            // Not critical, continue without services
+        }
+    }
+
+    // Load interfaces for selected exporter
+    async function loadInterfaces(exporterId) {
+        const interfaceSelect = document.getElementById('interfaceSelect');
+        interfaceSelect.disabled = true;
+        interfaceSelect.innerHTML = '<option value="">Loading...</option>';
+
+        try {
+            const response = await fetch(`/api/v1/interfaces/${exporterId}/json`);
+            const interfaces = await response.json();
+            allInterfaces[exporterId] = interfaces;
+
+            interfaceSelect.innerHTML = '<option value="">-- Select Interface --</option>';
+
+            interfaces.forEach(iface => {
+                const option = document.createElement('option');
+                option.value = iface.snmp_if;
+                option.textContent = `[${iface.snmp_if}] ${iface.description || iface.name || 'Interface'}`;
+                interfaceSelect.appendChild(option);
+            });
+
+            interfaceSelect.disabled = false;
+        } catch (error) {
+            console.error('Error loading interfaces:', error);
+            showError('Failed to load interfaces: ' + error.message);
+            interfaceSelect.innerHTML = '<option value="">Error loading interfaces</option>';
+        }
+    }
+
+    // Load flows using PostgREST endpoint
+    async function loadFlows() {
+        const exporterIp = document.getElementById('exporterSelect').value;
+        const interfaceId = document.getElementById('interfaceSelect').value;
+        const direction = document.getElementById('directionSelect').value;
+        const srcDst = document.getElementById('srcDstSelect').value;
+        const metric = document.getElementById('metricSelect').value;
+        const startTime = document.getElementById('startDateTime').value;
+        const endTime = document.getElementById('endDateTime').value;
+        const limit = document.getElementById('limitInput').value;
+        const search = document.getElementById('searchInput').value.trim();
+        const srcAddr = document.getElementById('srcAddrFilter').value.trim();
+        const dstAddr = document.getElementById('dstAddrFilter').value.trim();
+        const protocol = document.getElementById('protocolFilter').value.trim();
+        const srcPort = document.getElementById('srcPortFilter').value.trim();
+        const dstPort = document.getElementById('dstPortFilter').value.trim();
+
+        // Validation
+        if (!exporterIp) {
+            showError('Please select an exporter');
+            return;
+        }
+        if (!interfaceId) {
+            showError('Please select an interface');
+            return;
+        }
+        if (!startTime || !endTime) {
+            showError('Please select start and end times');
+            return;
+        }
+
+        currentConfig = { exporterIp, interfaceId, direction, srcDst, metric, startTime, endTime, limit, search, srcAddr, dstAddr, protocol, srcPort, dstPort };
+
+        const tbody = document.getElementById('flowsBody');
+        const colspanCount = showExtraColumns ? 7 : 4;
+        tbody.innerHTML = `<tr><td colspan="${colspanCount}" class="loading">Loading flows...</td></tr>`;
+
+        try {
+            // Build PostgREST query - include srcport, dstport, protocol when extra columns are shown
+            const addrField = `${srcDst}addr`;
+            let selectFields = `${addrField},${metric}.sum()`;
+            
+            if (showExtraColumns) {
+                selectFields = `${addrField},srcport,dstport,prot,${metric}.sum()`;
+            }
+            
+            let query = `${postgrestUrl}flows_agg_5min?select=${selectFields}&exporter=eq.${exporterIp}&${direction}=eq.${interfaceId}&bucket_5min=gt.${startTime}&bucket_5min=lt.${endTime}`;
+
+            // Add additional filters
+            if (srcAddr) {
+                query += `&srcaddr=eq.${srcAddr}`;
+            }
+            if (dstAddr) {
+                query += `&dstaddr=eq.${dstAddr}`;
+            }
+            if (protocol) {
+                query += `&protocol=eq.${protocol}`;
+            }
+            if (srcPort) {
+                query += `&srcport=eq.${srcPort}`;
+            }
+            if (dstPort) {
+                query += `&dstport=eq.${dstPort}`;
+            }
+
+            query += `&limit=${limit}`;
+
+            console.log('Query:', query);
+
+            const data = await $.getJSON(query);
+
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="loading">No flows found for the selected criteria</td></tr>';
+                updateStats(0, 0, 0);
+                return;
+            }
+
+            // Filter by search if provided
+            let flows = data;
+            if (search) {
+                flows = flows.filter(flow => flow[addrField] && flow[addrField].includes(search));
+            }
+
+            // Calculate total volume
+            const totalVolume = flows.reduce((sum, f) => sum + (f.sum || 0), 0);
+            const uniqueAddrs = new Set(flows.map(f => f[addrField])).size;
+
+            // Sort by volume descending
+            flows.sort((a, b) => (b.sum || 0) - (a.sum || 0));
+
+            // Update stats
+            updateStats(flows.length, uniqueAddrs, totalVolume);
+
+            // Render table
+            tbody.innerHTML = flows.map((flow, index) => {
+                const volume = flow.sum || 0;
+                const percentage = totalVolume > 0 ? ((volume / totalVolume) * 100).toFixed(2) : 0;
+                const displayVolume = metric === 'total_octets' ? formatBytes(volume) : formatNumber(volume);
+
+                let extraColumns = '';
+                if (showExtraColumns) {
+                    const srcPortValue = flow.srcport !== undefined ? flow.srcport : 'N/A';
+                    const dstPortValue = flow.dstport !== undefined ? flow.dstport : 'N/A';
+                    const protocolValue = flow.prot !== undefined ? getProtocolName(flow.prot) : 'N/A';
+                    
+                    extraColumns = `
+                        <td class="extra-column">${srcPortValue}</td>
+                        <td class="extra-column">${dstPortValue}</td>
+                        <td class="extra-column">${protocolValue}</td>
+                    `;
+                }
+
+                return `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td><strong>${flow[addrField] || 'N/A'}</strong></td>
+                        ${extraColumns}
+                        <td>${displayVolume}</td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div style="flex: 1; background: #e9ecef; border-radius: 4px; height: 20px; overflow: hidden;">
+                                    <div style="background: linear-gradient(90deg, #007bff, #0056b3); height: 100%; width: ${percentage}%;"></div>
+                                </div>
+                                <span style="min-width: 50px; text-align: right; font-weight: 600;">${percentage}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+        } catch (error) {
+            console.error('Error loading flows:', error);
+            showError('Error loading flows: ' + error.message);
+            tbody.innerHTML = `<tr><td colspan="${colspanCount}" class="loading">Error loading flows. Check console for details.</td></tr>`;
+        }
+    }
+
+    // Helper function to get protocol name
+    function getProtocolName(protocolNum) {
+        const protocols = {
+            1: 'ICMP',
+            6: 'TCP',
+            17: 'UDP',
+            47: 'GRE',
+            50: 'ESP',
+            51: 'AH',
+            58: 'ICMPv6',
+            41: 'IPv6',
+            89: 'OSPF',
+            132: 'SCTP'
+        };
+        return protocols[protocolNum] ? `${protocols[protocolNum]} (${protocolNum})` : protocolNum;
+    }
+
+    function updateStats(flowCount, uniqueAddrs, totalVolume) {
+        document.getElementById('totalFlows').textContent = formatNumber(flowCount);
+        document.getElementById('uniqueAddrs').textContent = formatNumber(uniqueAddrs);
+
+        const metric = document.getElementById('metricSelect').value;
+        const displayVolume = metric === 'total_octets' ? formatBytes(totalVolume) : formatNumber(totalVolume);
+        document.getElementById('totalVolume').textContent = displayVolume;
+
+        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+    }
+
+    // Event listeners
+    document.getElementById('exporterSelect').addEventListener('change', (e) => {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        const exporterId = selectedOption.dataset.id;
+
+        if (exporterId) {
+            loadInterfaces(exporterId);
+        } else {
+            document.getElementById('interfaceSelect').disabled = true;
+            document.getElementById('interfaceSelect').innerHTML = '<option value="">Select exporter first</option>';
+        }
+    });
+
+    document.getElementById('loadBtn').addEventListener('click', loadFlows);
+
+    document.getElementById('searchInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') loadFlows();
+    });
+
+    // Add keypress listeners for new filter inputs
+    document.getElementById('srcAddrFilter').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') loadFlows();
+    });
+
+    document.getElementById('dstAddrFilter').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') loadFlows();
+    });
+
+    document.getElementById('srcPortFilter').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') loadFlows();
+    });
+
+    document.getElementById('dstPortFilter').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') loadFlows();
+    });
+
+    // Service selector updates port input
+    document.getElementById('srcPortServiceFilter').addEventListener('change', (e) => {
+        if (e.target.value) {
+            document.getElementById('srcPortFilter').value = e.target.value;
+        }
+    });
+
+    document.getElementById('dstPortServiceFilter').addEventListener('change', (e) => {
+        if (e.target.value) {
+            document.getElementById('dstPortFilter').value = e.target.value;
+        }
+    });
+
+    // Show/Hide extra columns
+    document.getElementById('showExtraColumns').addEventListener('change', (e) => {
+        showExtraColumns = e.target.checked;
+        const extraColumns = document.querySelectorAll('.extra-column');
+        
+        extraColumns.forEach(col => {
+            col.style.display = showExtraColumns ? '' : 'none';
+        });
+
+        // Update colspan for loading message if visible
+        const loadingRows = document.querySelectorAll('#flowsBody tr td[colspan]');
+        loadingRows.forEach(td => {
+            td.setAttribute('colspan', showExtraColumns ? '7' : '4');
+        });
+
+        // Reload data if we have current config to show the new columns with data
+        if (currentConfig && showExtraColumns) {
+            loadFlows();
+        }
+    });
+
+    // Auto-refresh toggle
+    document.getElementById('autoRefresh').addEventListener('change', (e) => {
+        const indicator = document.getElementById('refreshIndicator');
+
+        if (e.target.checked) {
+            indicator.style.display = 'inline-block';
+            autoRefreshInterval = setInterval(() => {
+                if (currentConfig) {
+                    loadFlows();
+                }
+            }, 30000); // 30 seconds
+        } else {
+            indicator.style.display = 'none';
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+    });
+
+    // Initialize on page load
+    initializeTimes();
+    loadConfig();
+    loadExporters();
+    loadServices();
+</script>
+</body>
+</html>

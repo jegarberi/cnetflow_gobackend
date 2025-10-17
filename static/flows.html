@@ -412,7 +412,7 @@
                 <th class="extra-column" style="display: none;">Src Port</th>
                 <th class="extra-column" style="display: none;">Dst Port</th>
                 <th class="extra-column" style="display: none;">Protocol</th>
-                <th class="extra-column" style="display: none;">Service</th>
+                <!--<th class="extra-column" style="display: none;">Service</th>-->
                 <th>Volume</th>
                 <th>Percentage</th>
             </tr>
@@ -519,6 +519,7 @@
     // Load services from database
     async function loadServices() {
         try {
+            debugger;
             const response = await fetch('/api/v1/services/json');
             const services = await response.json();
             allServices = services;
@@ -715,10 +716,11 @@
                     const srcPortValue = flow.srcport !== undefined ? flow.srcport : 'N/A';
                     const dstPortValue = flow.dstport !== undefined ? flow.dstport : 'N/A';
                     const protocolValue = flow.prot !== undefined ? getProtocolName(flow.prot) : 'N/A';
-                    
+                    const srcPortName = flow.srcport !== undefined ? servicesMap[flow.prot+":"+flow.srcport] : 'N/A';
+                    const dstPortName = flow.dstport !== undefined ? servicesMap[flow.prot+":"+flow.dstport] : 'N/A';
                     extraColumns = `
-                        <td class="extra-column">${srcPortValue}</td>
-                        <td class="extra-column">${dstPortValue}</td>
+                        <td class="extra-column">${srcPortValue} [${srcPortName === undefined ? "" : srcPortName}]</td>
+                        <td class="extra-column">${dstPortValue} [${dstPortName === undefined ? "" : srcPortName}]</td>}]</td>
                         <td class="extra-column">${protocolValue}</td>
                     `;
                 }

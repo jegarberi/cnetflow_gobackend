@@ -412,13 +412,14 @@
                 <th class="extra-column" style="display: none;">Src Port</th>
                 <th class="extra-column" style="display: none;">Dst Port</th>
                 <th class="extra-column" style="display: none;">Protocol</th>
+                <th class="extra-column" style="display: none;">Service</th>
                 <th>Volume</th>
                 <th>Percentage</th>
             </tr>
             </thead>
             <tbody id="flowsBody">
             <tr>
-                <td colspan="7" class="loading">Configure filters and click "Load Flows"</td>
+                <td colspan="8" class="loading">Configure filters and click "Load Flows"</td>
             </tr>
             </tbody>
         </table>
@@ -432,6 +433,8 @@
     let allExporters = {};
     let allInterfaces = {};
     let allServices = [];
+    let servicesMap = {}; // Map for quick lookup: "protocol:port" -> service name
+    let showExtraColumns = false;
 
     // Initialize with default times (last hour)
     function initializeTimes() {
@@ -520,6 +523,13 @@
             const services = await response.json();
             allServices = services;
 
+            // Build service lookup map
+            servicesMap = {};
+            services.forEach(svc => {
+                const key = `${svc.protocol}:${svc.port}`;
+                servicesMap[key] = svc.name;
+            });
+
             // Group services by protocol for the port filters
             const tcpServices = services.filter(s => s.protocol === 6);
             const udpServices = services.filter(s => s.protocol === 17);
@@ -601,6 +611,7 @@
 
     // Load flows using PostgREST endpoint
     async function loadFlows() {
+        debugger;
         const exporterIp = document.getElementById('exporterSelect').value;
         const interfaceId = document.getElementById('interfaceSelect').value;
         const direction = document.getElementById('directionSelect').value;
@@ -640,8 +651,9 @@
             // Build PostgREST query - include srcport, dstport, protocol when extra columns are shown
             const addrField = `${srcDst}addr`;
             let selectFields = `${addrField},${metric}.sum()`;
-            
+            debugger;
             if (showExtraColumns) {
+                debugger;
                 selectFields = `${addrField},srcport,dstport,prot,${metric}.sum()`;
             }
             
@@ -753,6 +765,61 @@
         return protocols[protocolNum] ? `${protocols[protocolNum]} (${protocolNum})` : protocolNum;
     }
 
+    // Helper function to get service name from protocol and port
+    function getServiceName(protocol, srcPort, dstPort) {
+        // Handle undefined/null protocol
+        if (protocol === undefined || protocol === null) {
+            return 'N/A';
+        }
+        
+        // Check if we have any services loaded
+        if (Object.keys(servicesMap).length === 0) {
+            console.warn('No services loaded in servicesMap');
+            return 'No Services Loaded';
+        }
+        
+        // Try destination port first (most services use well-known destination ports)
+        if (dstPort !== undefined && dstPort !== null && dstPort !== 0) {
+            const dstKey = `${protocol}:${dstPort}`;
+            const dstService = servicesMap[dstKey];
+            
+            if (dstService) {
+                console.log(`Found service for ${dstKey}: ${dstService}`);
+                return dstService;
+            }
+        }
+        
+        // Try source port second (less common but possible)
+        if (srcPort !== undefined && srcPort !== null && srcPort !== 0) {
+            const srcKey = `${protocol}:${srcPort}`;
+            const srcService = servicesMap[srcKey];
+            
+            if (srcService) {
+                console.log(`Found service for ${srcKey}: ${srcService} (source)`);
+                return `${srcService} (src)`;
+            }
+        }
+        
+        // No service found - provide helpful classification
+        const higherPort = Math.max(
+            (dstPort !== undefined && dstPort !== null) ? dstPort : 0,
+            (srcPort !== undefined && srcPort !== null) ? srcPort : 0
+        );
+        
+        if (higherPort === 0) {
+            return 'N/A';
+        } else if (higherPort < 1024) {
+            // Well-known port range
+            return `Well-Known (${higherPort})`;
+        } else if (higherPort < 49152) {
+            // Registered port range
+            return `Registered (${higherPort})`;
+        } else {
+            // Dynamic/ephemeral port range
+            return 'Ephemeral';
+        }
+    }
+
     function updateStats(flowCount, uniqueAddrs, totalVolume) {
         document.getElementById('totalFlows').textContent = formatNumber(flowCount);
         document.getElementById('uniqueAddrs').textContent = formatNumber(uniqueAddrs);
@@ -812,9 +879,10 @@
             document.getElementById('dstPortFilter').value = e.target.value;
         }
     });
-
+    showExtraColumns = showExtraColumns.checked;
     // Show/Hide extra columns
     document.getElementById('showExtraColumns').addEventListener('change', (e) => {
+        debugger;
         showExtraColumns = e.target.checked;
         const extraColumns = document.querySelectorAll('.extra-column');
         
@@ -825,7 +893,7 @@
         // Update colspan for loading message if visible
         const loadingRows = document.querySelectorAll('#flowsBody tr td[colspan]');
         loadingRows.forEach(td => {
-            td.setAttribute('colspan', showExtraColumns ? '7' : '4');
+            td.setAttribute('colspan', showExtraColumns ? '8' : '4');
         });
 
         // Reload data if we have current config to show the new columns with data

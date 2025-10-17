@@ -20,6 +20,13 @@ import (
 	"github.com/oschwald/maxminddb-golang/v2"
 )
 
+type Service struct {
+	Protocol    int    `json:"protocol"`
+	Port        int    `json:"port"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
 func (p Coordinates) Haversine(p2 Coordinates) float64 {
 	lat1 := p.Latitude * RadiansPerDegree
 	lon1 := p.Longitude * RadiansPerDegree
@@ -243,6 +250,49 @@ func getInterfacesMetricsRequest(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func getPorts() []Service {
+	var rows *sql.Rows
+	var err error
+	services := []Service{}
+	rows, err = config.Db.Query("select number,protocol,name,description from ports; ")
+	if err != nil {
+		return services
+	}
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println(err.Error())
+		}
+	}(rows)
+	for rows.Next() {
+		//var row Row
+		var service Service
+
+		var portsql sql.NullInt64
+		var protocolsql sql.NullInt64
+		var namesql sql.NullString
+		var descriptionsql sql.NullString
+		err := rows.Scan(
+			&portsql,
+			&protocolsql,
+			&namesql,
+			&descriptionsql,
+		)
+		if err != nil {
+			log.Println(err.Error())
+			continue
+		}
+		service.Port = int(portsql.Int64)
+		service.Protocol = int(protocolsql.Int64)
+		service.Name = namesql.String
+		service.Description = descriptionsql.String
+		services = append(services, service)
+
+	}
+	return services
+
+}
+
 func getInterfacesMetrics(exporter string, interfac string, start time.Time, end time.Time) ([]Metric, error) {
 	var rows *sql.Rows
 	var err error
@@ -295,6 +345,26 @@ func getInterfacesMetrics(exporter string, interfac string, start time.Time, end
 	})
 
 	return metrics, nil
+}
+
+func getServicesRequest(w http.ResponseWriter, r *http.Request) {
+	format := r.PathValue("format")
+
+	if format == "" {
+		format = "json"
+	}
+	ports := getPorts()
+
+	if format == "json" {
+		bytes, err := json.Marshal(ports)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+		}
+		fmt.Fprintf(w, string(bytes))
+		return
+	}
+
 }
 
 func getInterfacesRequest(w http.ResponseWriter, r *http.Request) {
@@ -611,7 +681,7 @@ func main() {
 	mux.HandleFunc("/api/v1/metrics/{exporter}/{interface}/{start}/{end}/js", renderTimeseriesChartJS)
 	mux.HandleFunc("/api/v1/flows/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/js", renderPieChartJS)
 	mux.HandleFunc("/api/v1/flows/{container}/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/js", renderPieChartJS)
-
+	mux.HandleFunc("/api/v1/services/{format}", getServicesRequest)
 	mux.HandleFunc("/api/v1/interfaces/{exporter}/{format}", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/exporters/{format}", getExportersRequest)
 

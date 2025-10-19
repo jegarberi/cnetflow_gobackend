@@ -537,7 +537,7 @@
 
     async function loadServices() {
         try {
-            debugger;
+
             const response = await fetch('/api/v1/services/json');
             const services = await response.json();
             allServices = services;
@@ -726,7 +726,7 @@
 
     // Load flows using PostgREST endpoint
     async function loadFlows() {
-        debugger;
+
         const exporterIp = document.getElementById('exporterSelect').value;
         const interfaceId = document.getElementById('interfaceSelect').value;
         const direction = document.getElementById('directionSelect').value;
@@ -769,9 +769,9 @@
             // Build PostgREST query - include srcport, dstport, protocol when extra columns are shown
             const addrField = `${srcDst}addr`;
             let selectFields = `${addrField},${metric}.sum()`;
-            debugger;
+
             if (showExtraColumns) {
-                debugger;
+
                 selectFields = `${addrField},srcport,dstport,prot,${metric}.sum()`;
             }
             
@@ -980,7 +980,7 @@
     }
 
     function addServiceNetwork(cidr, name) {
-        debugger;
+
         const parsed = parseCidr(cidr);
         if (parsed && name) {
             serviceNetworks.push({ ...parsed, name, cidr });
@@ -994,6 +994,7 @@
         // Then try CIDR-based mapping and choose the most specific match
         let best = null;
         for (const entry of serviceNetworks) {
+            debugger;
             if (ipMatchesEntry(ip, entry)) {
                 if (!best || entry.bits > best.bits) {
                     best = entry;
@@ -1065,7 +1066,7 @@
     showExtraColumns = showExtraColumns.checked;
     // Show/Hide extra columns
     document.getElementById('showExtraColumns').addEventListener('change', (e) => {
-        debugger;
+
         showExtraColumns = e.target.checked;
         const extraColumns = document.querySelectorAll('.extra-column');
         

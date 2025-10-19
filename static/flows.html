@@ -600,6 +600,28 @@
         }
     }
 
+    // Load service networks (CIDR -> name) and populate matcher
+    async function loadServiceNetworks() {
+        try {
+            const response = await fetch('/api/v1/service-networks');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const networks = await response.json();
+            serviceNetworks = [];
+            if (Array.isArray(networks)) {
+                networks.forEach(n => {
+                    if (n && n.cidr && n.name) {
+                        addServiceNetwork(n.cidr, n.name);
+                    }
+                });
+            }
+            console.log(`Loaded ${serviceNetworks.length} service networks`);
+        } catch (e) {
+            console.warn('Failed to load service networks:', e);
+        }
+    }
+
     // Load interfaces for selected exporter
     async function loadInterfaces(exporterId) {
         const interfaceSelect = document.getElementById('interfaceSelect');
@@ -1088,6 +1110,7 @@
     loadConfig();
     loadExporters();
     loadServices();
+    loadServiceNetworks();
 </script>
 </body>
 </html>

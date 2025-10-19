@@ -96,3 +96,10 @@ type Interface struct {
 	Speed    int64  `json:"speed" db:"speed"`
 	Enabled  bool   `json:"enabled" db:"enabled"`
 }
+
+// ServiceNetwork represents a network (CIDR) mapped to a name from the services table
+// Minimal struct for API/JSON output when needed
+type ServiceNetwork struct {
+	CIDR string `json:"cidr"`
+	Name string `json:"name"`
+}

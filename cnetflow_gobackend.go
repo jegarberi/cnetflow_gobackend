@@ -293,6 +293,35 @@ func getPorts() []Service {
 
 }
 
+// getServiceNetworks returns list of CIDR/name pairs from the services table
+// Minimal helper as requested by issue description
+func getServiceNetworks() []ServiceNetwork {
+	var rows *sql.Rows
+	var err error
+	entries := []ServiceNetwork{}
+	rows, err = config.Db.Query("select addr, name from services; ")
+	if err != nil {
+		return entries
+	}
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Println(err.Error())
+		}
+	}(rows)
+	for rows.Next() {
+		var cidr sql.NullString
+		var name sql.NullString
+		err := rows.Scan(&cidr, &name)
+		if err != nil {
+			log.Println(err.Error())
+			continue
+		}
+		entries = append(entries, ServiceNetwork{CIDR: cidr.String, Name: name.String})
+	}
+	return entries
+}
+
 func getInterfacesMetrics(exporter string, interfac string, start time.Time, end time.Time) ([]Metric, error) {
 	var rows *sql.Rows
 	var err error
@@ -365,6 +394,26 @@ func getServicesRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+}
+
+// getServiceNetworksRequest exposes CIDR/name pairs from services as JSON
+func getServiceNetworksRequest(w http.ResponseWriter, r *http.Request) {
+	format := r.PathValue("format")
+	if format == "" {
+		format = "json"
+	}
+	entries := getServiceNetworks()
+	if format == "json" {
+		bytes, err := json.Marshal(entries)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(bytes)
+		return
+	}
 }
 
 func getInterfacesRequest(w http.ResponseWriter, r *http.Request) {
@@ -682,6 +731,9 @@ func main() {
 	mux.HandleFunc("/api/v1/flows/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/js", renderPieChartJS)
 	mux.HandleFunc("/api/v1/flows/{container}/{exporter}/{interface}/{start}/{end}/{src_or_dst}/{bytes_packets_flow}/{direction}/js", renderPieChartJS)
 	mux.HandleFunc("/api/v1/services/{format}", getServicesRequest)
+	// Service networks endpoint
+	mux.HandleFunc("/api/v1/service-networks", getServiceNetworksRequest)
+	mux.HandleFunc("/api/v1/service-networks/{format}", getServiceNetworksRequest)
 	mux.HandleFunc("/api/v1/interfaces/{exporter}/{format}", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/exporters/{format}", getExportersRequest)
 

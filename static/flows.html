@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NetFlow Flows Viewer</title>
     <script src="js/jquery-3.7.1.min.js"></script>
+    <script src="js/highcharts.js"></script>
+    <script src="js/exporting.js"></script>
+    <script src="js/export-data.js"></script>
+    <script src="js/accessibility.js"></script>
     <style>
         * {
             margin: 0;
@@ -401,6 +405,8 @@
         </div>
     </div>
 
+    <div id="interfaceMetricsChart" style="height: 420px; margin-bottom: 20px;"></div>
+
     <div id="errorContainer"></div>
 
     <div class="table-container">
@@ -435,6 +441,17 @@
     let allServices = [];
     let servicesMap = {}; // Map for quick lookup: "protocol:port" -> service name
     let showExtraColumns = false;
+    let interfaceChart = null;
+
+    // Set Highcharts timezone to GMT-3 (UTC-3)
+    if (window.Highcharts && Highcharts.setOptions) {
+        Highcharts.setOptions({
+            time: {
+                useUTC: true,
+                timezoneOffset: 3 * 60 // minutes west of UTC; +180 = UTC-3
+            }
+        });
+    }
 
     // Initialize with default times (last hour)
     function initializeTimes() {
@@ -610,6 +627,80 @@
         }
     }
 
+    // Load and render Highcharts time series for interface metrics
+    async function loadInterfaceMetricsChart() {
+        const exporterSelect = document.getElementById('exporterSelect');
+        const exporterId = exporterSelect.options[exporterSelect.selectedIndex]?.dataset?.id || '';
+        const interfaceId = document.getElementById('interfaceSelect').value;
+        const startTime = document.getElementById('startDateTime').value;
+        const endTime = document.getElementById('endDateTime').value;
+
+        if (!exporterId || !interfaceId || !startTime || !endTime) {
+            return; // wait until filters are set
+        }
+
+        try {
+            const query = `${postgrestUrl}interface_metrics?exporter=eq.${exporterId}&snmp_index=eq.${interfaceId}&inserted_at=gt.${startTime}&inserted_at=lt.${endTime}&order=inserted_at.asc`;
+            const data = await $.getJSON(query);
+
+            // Build bits/s from octet deltas
+            const seriesIn = [];
+            const seriesOut = [];
+
+            for (let i = 1; i < data.length; i++) {
+                const prev = data[i - 1];
+                const curr = data[i];
+                const last = Math.floor(Date.parse(prev.inserted_at) / 1000);
+                const now = Math.floor(Date.parse(curr.inserted_at) / 1000);
+                const interval = Math.max(1, now - last);
+
+                let rateIn = Math.floor(8 * (curr.octets_in - prev.octets_in) / interval);
+                let rateOut = Math.floor(8 * (curr.octets_out - prev.octets_out) / interval);
+
+                if (rateIn < 0) rateIn = 0;
+                if (rateOut < 0) rateOut = 0;
+
+                const t = Date.parse(curr.inserted_at);
+                seriesIn.push([t, rateIn]);
+                seriesOut.push([t, rateOut]);
+            }
+
+            // Initialize or update chart
+            if (!interfaceChart) {
+                interfaceChart = Highcharts.chart('interfaceMetricsChart', {
+                    title: { text: 'Interface Traffic Rate', align: 'left' },
+                    subtitle: { text: 'bits per second (in/out)', align: 'left' },
+                    chart: { zooming: { type: 'x' } },
+                    xAxis: { type: 'datetime' },
+                    yAxis: { title: { text: 'bits/s' } },
+                    legend: { layout: 'horizontal', align: 'left', verticalAlign: 'top' },
+                    tooltip: { shared: true, valueSuffix: ' bps' },
+                    series: [
+                        { type: 'line', name: 'bits/s in', data: seriesIn },
+                        { type: 'line', name: 'bits/s out', data: seriesOut }
+                    ],
+                    responsive: { rules: [{ condition: { maxWidth: 600 }, chartOptions: { legend: { layout: 'horizontal', align: 'center', verticalAlign: 'bottom' } } }] }
+                });
+            } else {
+                // Update data efficiently
+                if (interfaceChart.series.length < 2) {
+                    interfaceChart.series[0]?.remove(false);
+                    interfaceChart.addSeries({ type: 'line', name: 'bits/s in', data: seriesIn }, false);
+                    interfaceChart.addSeries({ type: 'line', name: 'bits/s out', data: seriesOut }, false);
+                    interfaceChart.redraw();
+                } else {
+                    interfaceChart.series[0].setData(seriesIn, false);
+                    interfaceChart.series[1].setData(seriesOut, false);
+                    interfaceChart.redraw();
+                }
+            }
+        } catch (err) {
+            console.error('Error loading interface metrics:', err);
+            // Non-fatal; show error unobtrusively
+            // showError('Failed to load interface metrics: ' + err.message);
+        }
+    }
+
     // Load flows using PostgREST endpoint
     async function loadFlows() {
         debugger;
@@ -644,6 +735,9 @@
 
         currentConfig = { exporterIp, interfaceId, direction, srcDst, metric, startTime, endTime, limit, search, srcAddr, dstAddr, protocol, srcPort, dstPort };
 
+        // Update the interface metrics chart in parallel
+        loadInterfaceMetricsChart();
+
         const tbody = document.getElementById('flowsBody');
         const colspanCount = showExtraColumns ? 7 : 4;
         tbody.innerHTML = `<tr><td colspan="${colspanCount}" class="loading">Loading flows...</td></tr>`;
@@ -668,7 +762,7 @@
                 query += `&dstaddr=eq.${dstAddr}`;
             }
             if (protocol) {
-                query += `&protocol=eq.${protocol}`;
+                query += `&prot=eq.${protocol}`;
             }
             if (srcPort) {
                 query += `&srcport=eq.${srcPort}`;
@@ -676,7 +770,9 @@
             if (dstPort) {
                 query += `&dstport=eq.${dstPort}`;
             }
-
+            if (searchInput.value !== "") {
+                query += `&${addrField}=eq.${searchInput.value}`;
+            }
             query += `&limit=${limit}`;
 
             console.log('Query:', query);
@@ -720,7 +816,8 @@
                     const dstPortName = flow.dstport !== undefined ? servicesMap[flow.prot+":"+flow.dstport] : 'N/A';
                     extraColumns = `
                         <td class="extra-column">${srcPortValue} [${srcPortName === undefined ? "" : srcPortName}]</td>
-                        <td class="extra-column">${dstPortValue} [${dstPortName === undefined ? "" : srcPortName}]</td>}]</td>
+                        <td class="extra-column">${dstPortValue} [${dstPortName === undefined ? "" : srcPortName}]</td>
+
                         <td class="extra-column">${protocolValue}</td>
                     `;
                 }

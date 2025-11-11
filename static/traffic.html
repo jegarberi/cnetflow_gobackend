@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetFlow Traffic Analysis</title>
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <script src="js/highcharts.js"></script>
+    <script src="js/exporting.js"></script>
+    <script src="js/export-data.js"></script>
+    <script src="js/accessibility.js"></script>
+    <script src="js/cache.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1900px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 32px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .back-link {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .filters-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+        }
+
+        .filters-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .filters-header h2 {
+            color: #333;
+            font-size: 20px;
+        }
+
+        .toggle-filters {
+            background: transparent;
+            border: 2px solid #667eea;
+            color: #667eea;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .toggle-filters:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            color: #555;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .filter-group select:disabled {
+            background-color: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: #555;
+            cursor: pointer;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .stat-card:nth-child(1) {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .stat-card:nth-child(2) {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .stat-card:nth-child(3) {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .stat-card:nth-child(4) {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+
+        .stat-card:nth-child(5) {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.95;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .chart-container {
+            margin-bottom: 25px;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .table-container {
+            overflow-x: auto;
+            max-height: 700px;
+            overflow-y: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        th {
+            padding: 14px 10px;
+            text-align: left;
+            font-weight: 600;
+            border-right: 1px solid rgba(255,255,255,0.2);
+            cursor: pointer;
+            user-select: none;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 12px;
+        }
+
+        th:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        th:last-child {
+            border-right: none;
+        }
+
+        th .sort-indicator {
+            margin-left: 5px;
+            font-size: 10px;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #e0e0e0;
+            transition: background-color 0.2s;
+        }
+
+        tbody tr:hover {
+            background-color: #f0f4ff;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        tbody tr:nth-child(even):hover {
+            background-color: #f0f4ff;
+        }
+
+        td {
+            padding: 12px 10px;
+            color: #333;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+            font-size: 18px;
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #f5c6cb;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-tcp {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .badge-udp {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .badge-icmp {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .badge-other {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .progress-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .progress-track {
+            flex: 1;
+            background: #e9ecef;
+            border-radius: 4px;
+            height: 24px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .progress-value {
+            min-width: 60px;
+            text-align: right;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .refresh-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.1); }
+        }
+
+        .view-toggle {
+            display: flex;
+            gap: 5px;
+            background: #e9ecef;
+            padding: 4px;
+            border-radius: 6px;
+        }
+
+        .view-toggle button {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .view-toggle button.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .filters-collapsed {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>
+            🌊 NetFlow Traffic Analysis
+        </h1>
+        <a href="/" class="back-link">← Back to Home</a>
+    </div>
+
+    <div class="filters-section">
+        <div class="filters-header">
+            <h2>📋 Filters</h2>
+            <button class="toggle-filters" onclick="toggleFilters()">Toggle Filters</button>
+        </div>
+
+        <div id="filtersContent">
+            <div class="filters">
+                <div class="filter-group">
+                    <label for="exporterSelect">Exporter *</label>
+                    <select id="exporterSelect">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="interfaceSelect">Interface *</label>
+                    <select id="interfaceSelect" disabled>
+                        <option value="">Select exporter first</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="directionSelect">Direction</label>
+                    <select id="directionSelect">
+                        <option value="input">Input</option>
+                        <option value="output">Output</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="startDateTime">Start Time *</label>
+                    <input type="datetime-local" id="startDateTime" required>
+                </div>
+
+                <div class="filter-group">
+                    <label for="endDateTime">End Time *</label>
+                    <input type="datetime-local" id="endDateTime" required>
+                </div>
+
+                <div class="filter-group">
+                    <label for="srcAddrFilter">Source Address</label>
+                    <input type="text" id="srcAddrFilter" placeholder="e.g., 10.0.0.1">
+                </div>
+
+                <div class="filter-group">
+                    <label for="dstAddrFilter">Destination Address</label>
+                    <input type="text" id="dstAddrFilter" placeholder="e.g., 192.168.1.1">
+                </div>
+
+                <div class="filter-group">
+                    <label for="protocolFilter">Protocol</label>
+                    <select id="protocolFilter">
+                        <option value="">All Protocols</option>
+                        <option value="1">ICMP (1)</option>
+                        <option value="6">TCP (6)</option>
+                        <option value="17">UDP (17)</option>
+                        <option value="41">IPv6 (41)</option>
+                        <option value="47">GRE (47)</option>
+                        <option value="50">ESP (50)</option>
+                        <option value="51">AH (51)</option>
+                        <option value="58">ICMPv6 (58)</option>
+                        <option value="89">OSPF (89)</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="srcPortFilter">Source Port</label>
+                    <input type="number" id="srcPortFilter" placeholder="e.g., 80" min="0" max="65535">
+                </div>
+
+                <div class="filter-group">
+                    <label for="dstPortFilter">Destination Port</label>
+                    <input type="number" id="dstPortFilter" placeholder="e.g., 443" min="0" max="65535">
+                </div>
+
+                <div class="filter-group">
+                    <label for="srcASFilter">Source AS</label>
+                    <input type="number" id="srcASFilter" placeholder="e.g., 64512" min="0">
+                </div>
+
+                <div class="filter-group">
+                    <label for="dstASFilter">Destination AS</label>
+                    <input type="number" id="dstASFilter" placeholder="e.g., 64513" min="0">
+                </div>
+
+                <div class="filter-group">
+                    <label for="minOctetsFilter">Min Bytes</label>
+                    <input type="number" id="minOctetsFilter" placeholder="e.g., 1000000" min="0">
+                </div>
+
+                <div class="filter-group">
+                    <label for="maxOctetsFilter">Max Bytes</label>
+                    <input type="number" id="maxOctetsFilter" placeholder="e.g., 10000000" min="0">
+                </div>
+
+                <div class="filter-group">
+                    <label for="limitInput">Results Limit</label>
+                    <select id="limitInput">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="250">250</option>
+                        <option value="500">500</option>
+                        <option value="1000">1000</option>
+                        <option value="5000">5000</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="groupBySelect">Group By</label>
+                    <select id="groupBySelect">
+                        <option value="address">Address Only</option>
+                        <option value="port">Address + Ports</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="countryFilter">Filter by Country</label>
+                    <input type="text" id="countryFilter" placeholder="e.g., United States, US, Brazil">
+                </div>
+            </div>
+
+            <div class="actions">
+                <button id="loadBtn" class="btn btn-primary">🔍 Load Traffic Data</button>
+                <button id="resetBtn" class="btn btn-secondary">🔄 Reset Filters</button>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="autoRefresh">
+                    Auto-refresh (30s)
+                    <span id="refreshIndicator" style="display: none;" class="refresh-indicator"></span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="showChart">
+                    Show Chart
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-label">Total Records</div>
+            <div class="stat-value" id="totalRecords">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Unique Addresses</div>
+            <div class="stat-value" id="uniqueAddrs">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Bytes</div>
+            <div class="stat-value" id="totalOctets">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Packets</div>
+            <div class="stat-value" id="totalPackets">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Last Updated</div>
+            <div class="stat-value" id="lastUpdate" style="font-size: 18px;">-</div>
+        </div>
+    </div>
+
+    <div id="trafficChart" class="chart-container" style="display: none; height: 450px;"></div>
+
+    <div id="errorContainer"></div>
+
+    <div class="table-container">
+        <table id="trafficTable">
+            <thead>
+            <tr>
+                <th onclick="sortTable(0)">#</th>
+                <th onclick="sortTable(1)">Address <span class="sort-indicator"></span></th>
+                <th id="thSrcPort" onclick="sortTable(2)" style="display: none;">Src Port <span class="sort-indicator"></span></th>
+                <th id="thDstPort" onclick="sortTable(3)" style="display: none;">Dst Port <span class="sort-indicator"></span></th>
+                <th id="thProtocol" onclick="sortTable(4)" style="display: none;">Protocol <span class="sort-indicator"></span></th>
+                <th onclick="sortTable(5)">Total Bytes <span class="sort-indicator">▼</span></th>
+                <th onclick="sortTable(6)">Total Packets <span class="sort-indicator"></span></th>
+                <th onclick="sortTable(7)">Flow Count <span class="sort-indicator"></span></th>
+                <th onclick="sortTable(8)">Percentage <span class="sort-indicator"></span></th>
+            </tr>
+            </thead>
+            <tbody id="trafficBody">
+            <tr>
+                <td colspan="9" class="loading">Configure filters and click "Load Traffic Data"</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let autoRefreshInterval = null;
+    let currentData = [];
+    let sortColumn = 5;
+    let sortDirection = -1; // -1 for desc, 1 for asc
+    let allExporters = {};
+    let allInterfaces = {};
+    let dataRange = { min: null, max: null };
+
+    // Initialize with default times (last hour)
+    function initializeTimes() {
+        const now = new Date();
+        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+        document.getElementById('startDateTime').value = formatDateTimeLocal(oneHourAgo);
+        document.getElementById('endDateTime').value = formatDateTimeLocal(now);
+    }
+
+    // Load data range and adjust default times
+    async function loadDataRange(exporter) {
+        if (!exporter) return;
+
+        try {
+            const result = await cache.fetchWithCache(`/api/v1/traffic/data-range?exporter=${exporter}`, {}, CacheTTL.MEDIUM);
+            const data = result.data;
+
+            if (data.min_time && data.max_time) {
+                dataRange.min = new Date(data.min_time);
+                dataRange.max = new Date(data.max_time);
+
+                // Set default times to last hour of available data
+                const endTime = dataRange.max;
+                const startTime = new Date(endTime.getTime() - 60 * 60 * 1000);
+
+                document.getElementById('startDateTime').value = formatDateTimeLocal(startTime);
+                document.getElementById('endDateTime').value = formatDateTimeLocal(endTime);
+
+                console.log(`Data available from ${dataRange.min.toLocaleString()} to ${dataRange.max.toLocaleString()}`);
+            }
+        } catch (error) {
+            console.error('Error loading data range:', error);
+        }
+    }
+
+    function formatDateTimeLocal(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function formatNumber(num) {
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    function showError(message) {
+        const errorContainer = document.getElementById('errorContainer');
+        errorContainer.innerHTML = `<div class="error"><strong>Error:</strong> ${message}</div>`;
+        setTimeout(() => {
+            errorContainer.innerHTML = '';
+        }, 8000);
+    }
+
+    function toggleFilters() {
+        const content = document.getElementById('filtersContent');
+        content.classList.toggle('filters-collapsed');
+    }
+
+    async function loadExporters() {
+        try {
+            const result = await cache.fetchWithCache('/api/v1/exporters/json', {}, CacheTTL.LONG);
+            const exporters = result.data;
+            allExporters = exporters;
+
+            const select = document.getElementById('exporterSelect');
+            select.innerHTML = '<option value="">-- Select Exporter --</option>';
+
+            for (const id in exporters) {
+                const exp = exporters[id];
+                const option = document.createElement('option');
+                option.value = exp.ip_inet;
+                option.dataset.id = id;
+                option.textContent = `${exp.name} [${exp.ip_inet}]`;
+                select.appendChild(option);
+            }
+        } catch (error) {
+            console.error('Error loading exporters:', error);
+            showError('Failed to load exporters: ' + error.message);
+        }
+    }
+
+    async function loadInterfaces(exporterId) {
+        const interfaceSelect = document.getElementById('interfaceSelect');
+        interfaceSelect.disabled = true;
+        interfaceSelect.innerHTML = '<option value="">Loading...</option>';
+
+        try {
+            const result = await cache.fetchWithCache(`/api/v1/interfaces/${exporterId}/json`, {}, CacheTTL.LONG);
+            const interfaces = result.data;
+            allInterfaces[exporterId] = interfaces;
+
+            interfaceSelect.innerHTML = '<option value="">-- Select Interface --</option>';
+
+            interfaces.forEach(iface => {
+                const option = document.createElement('option');
+                option.value = iface.snmp_if;
+                option.textContent = `[${iface.snmp_if}] ${iface.description || iface.name || 'Interface'}`;
+                interfaceSelect.appendChild(option);
+            });
+
+            interfaceSelect.disabled = false;
+        } catch (error) {
+            console.error('Error loading interfaces:', error);
+            showError('Failed to load interfaces: ' + error.message);
+            interfaceSelect.innerHTML = '<option value="">Error loading interfaces</option>';
+        }
+    }
+
+    function getProtocolBadge(protocol) {
+        if (!protocol) return '';
+        const protocolStr = String(protocol);
+        if (protocolStr.includes('TCP') || protocolStr === '6') return '<span class="badge badge-tcp">TCP</span>';
+        if (protocolStr.includes('UDP') || protocolStr === '17') return '<span class="badge badge-udp">UDP</span>';
+        if (protocolStr.includes('ICMP') || protocolStr === '1' || protocolStr === '58') return '<span class="badge badge-icmp">ICMP</span>';
+        return `<span class="badge badge-other">${protocol}</span>`;
+    }
+
+    function getFlagEmoji(countryCode) {
+        if (!countryCode || countryCode.length !== 2) return '';
+        const codePoints = countryCode
+            .toUpperCase()
+            .split('')
+            .map(char => 127397 + char.charCodeAt());
+        return String.fromCodePoint(...codePoints);
+    }
+
+    async function loadTrafficData() {
+        const exporter = document.getElementById('exporterSelect').value;
+        const interfaceId = document.getElementById('interfaceSelect').value;
+        const direction = document.getElementById('directionSelect').value;
+        const startTime = document.getElementById('startDateTime').value;
+        const endTime = document.getElementById('endDateTime').value;
+        const srcAddr = document.getElementById('srcAddrFilter').value.trim();
+        const dstAddr = document.getElementById('dstAddrFilter').value.trim();
+        const protocol = document.getElementById('protocolFilter').value.trim();
+        const srcPort = document.getElementById('srcPortFilter').value.trim();
+        const dstPort = document.getElementById('dstPortFilter').value.trim();
+        const srcAS = document.getElementById('srcASFilter').value.trim();
+        const dstAS = document.getElementById('dstASFilter').value.trim();
+        const minOctets = document.getElementById('minOctetsFilter').value.trim();
+        const maxOctets = document.getElementById('maxOctetsFilter').value.trim();
+        const limit = document.getElementById('limitInput').value;
+        const groupBy = document.getElementById('groupBySelect').value;
+
+        if (!exporter) {
+            showError('Please select an exporter');
+            return;
+        }
+        if (!interfaceId) {
+            showError('Please select an interface');
+            return;
+        }
+        if (!startTime || !endTime) {
+            showError('Please select start and end times');
+            return;
+        }
+
+        const tbody = document.getElementById('trafficBody');
+        tbody.innerHTML = `<tr><td colspan="9" class="loading">Loading traffic data</td></tr>`;
+
+        try {
+            // Build query parameters
+            const params = new URLSearchParams({
+                exporter: exporter,
+                interface: interfaceId,
+                direction: direction,
+                start: new Date(startTime).toISOString(),
+                end: new Date(endTime).toISOString(),
+                limit: limit,
+                group_by: groupBy
+            });
+
+            if (srcAddr) params.append('srcaddr', srcAddr);
+            if (dstAddr) params.append('dstaddr', dstAddr);
+            if (protocol) params.append('protocol', protocol);
+            if (srcPort) params.append('srcport', srcPort);
+            if (dstPort) params.append('dstport', dstPort);
+            if (srcAS) params.append('srcas', srcAS);
+            if (dstAS) params.append('dstas', dstAS);
+            if (minOctets) params.append('min_octets', minOctets);
+            if (maxOctets) params.append('max_octets', maxOctets);
+
+            const result = await cache.fetchWithCache(`/api/v1/traffic?${params.toString()}`, { params: Object.fromEntries(params) }, CacheTTL.MEDIUM);
+            const data = result.data;
+            currentData = data.records || [];
+
+            // Show/hide port columns based on group_by
+            const showPorts = groupBy === 'port';
+            document.getElementById('thSrcPort').style.display = showPorts ? '' : 'none';
+            document.getElementById('thDstPort').style.display = showPorts ? '' : 'none';
+            document.getElementById('thProtocol').style.display = showPorts ? '' : 'none';
+
+            if (currentData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="loading">No traffic data found for the selected criteria</td></tr>';
+                updateStats(0, 0, 0, 0);
+                return;
+            }
+
+            // Apply client-side country filter if specified
+            const countryFilter = document.getElementById('countryFilter').value.trim().toLowerCase();
+            if (countryFilter) {
+                currentData = currentData.filter(record => {
+                    if (!record.enrichment) return false;
+                    const country = (record.enrichment.country || '').toLowerCase();
+                    const countryCode = (record.enrichment.country_code || '').toLowerCase();
+                    return country.includes(countryFilter) || countryCode === countryFilter;
+                });
+
+                // Recalculate stats after filtering
+                const filteredOctets = currentData.reduce((sum, r) => sum + r.total_octets, 0);
+                const filteredPackets = currentData.reduce((sum, r) => sum + r.total_packets, 0);
+                const filteredAddrs = new Set(currentData.map(r => r.address)).size;
+
+                // Recalculate percentages
+                currentData.forEach(record => {
+                    record.percentage = filteredOctets > 0 ? (record.total_octets / filteredOctets * 100) : 0;
+                });
+
+                updateStats(currentData.length, filteredAddrs, filteredOctets, filteredPackets);
+            } else {
+                // Update stats with original data
+                updateStats(data.total_records, data.unique_addrs, data.total_octets, data.total_packets);
+            }
+
+            // Render table
+            renderTable();
+
+            // Render chart if enabled
+            if (document.getElementById('showChart').checked) {
+                renderChart();
+            }
+
+        } catch (error) {
+            console.error('Error loading traffic data:', error);
+            showError('Error loading traffic data: ' + error.message);
+            tbody.innerHTML = `<tr><td colspan="9" class="loading">Error loading traffic data. Check console for details.</td></tr>`;
+        }
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('trafficBody');
+        const groupBy = document.getElementById('groupBySelect').value;
+        const showPorts = groupBy === 'port';
+
+        tbody.innerHTML = currentData.map((record, index) => {
+            const percentage = record.percentage || 0;
+
+            // Build enrichment info display
+            let enrichmentInfo = '';
+            if (record.enrichment) {
+                const parts = [];
+                if (record.enrichment.service_name) {
+                    parts.push(`<strong>${record.enrichment.service_name}</strong>`);
+                }
+                if (record.enrichment.hostname && !record.enrichment.is_private) {
+                    parts.push(record.enrichment.hostname);
+                }
+                if (record.enrichment.country) {
+                    const flag = record.enrichment.country_code ? ` ${getFlagEmoji(record.enrichment.country_code)}` : '';
+                    parts.push(`${record.enrichment.country}${flag}`);
+                }
+                if (record.enrichment.city) {
+                    parts.push(record.enrichment.city);
+                }
+                if (parts.length > 0) {
+                    enrichmentInfo = `<br><small style="color: #666;">${parts.join(' | ')}</small>`;
+                }
+            }
+
+            const portsColumns = showPorts ? `
+                <td>${record.srcport || 'N/A'}</td>
+                <td>${record.dstport || 'N/A'}</td>
+                <td>${getProtocolBadge(record.protocol_name || record.protocol)}</td>
+            ` : '';
+
+            return `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td><strong>${record.address}</strong>${enrichmentInfo}</td>
+                    ${portsColumns}
+                    <td>${formatBytes(record.total_octets)}</td>
+                    <td>${formatNumber(record.total_packets)}</td>
+                    <td>${formatNumber(record.flow_count)}</td>
+                    <td>
+                        <div class="progress-bar">
+                            <div class="progress-track">
+                                <div class="progress-fill" style="width: ${percentage}%;"></div>
+                            </div>
+                            <span class="progress-value">${percentage.toFixed(2)}%</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderChart() {
+        const chartDiv = document.getElementById('trafficChart');
+        chartDiv.style.display = 'block';
+
+        const topRecords = currentData.slice(0, 20);
+        const categories = topRecords.map(r => r.address);
+        const bytesData = topRecords.map(r => r.total_octets);
+        const packetsData = topRecords.map(r => r.total_packets);
+
+        Highcharts.chart('trafficChart', {
+            chart: { type: 'column' },
+            title: { text: 'Top 20 Traffic Sources/Destinations', align: 'left' },
+            xAxis: { categories: categories, crosshair: true },
+            yAxis: [{
+                title: { text: 'Bytes' }
+            }, {
+                title: { text: 'Packets' },
+                opposite: true
+            }],
+            tooltip: { shared: true },
+            series: [{
+                name: 'Bytes',
+                data: bytesData,
+                yAxis: 0,
+                color: '#667eea'
+            }, {
+                name: 'Packets',
+                data: packetsData,
+                yAxis: 1,
+                color: '#764ba2'
+            }]
+        });
+    }
+
+    function sortTable(column) {
+        if (sortColumn === column) {
+            sortDirection *= -1;
+        } else {
+            sortColumn = column;
+            sortDirection = -1;
+        }
+
+        // Update sort indicators
+        document.querySelectorAll('.sort-indicator').forEach(el => el.textContent = '');
+        const indicators = document.querySelectorAll('th .sort-indicator');
+        if (indicators[column]) {
+            indicators[column].textContent = sortDirection === -1 ? '▼' : '▲';
+        }
+
+        // Sort data
+        currentData.sort((a, b) => {
+            let aVal, bVal;
+            switch (column) {
+                case 1: aVal = a.address; bVal = b.address; break;
+                case 2: aVal = a.srcport || 0; bVal = b.srcport || 0; break;
+                case 3: aVal = a.dstport || 0; bVal = b.dstport || 0; break;
+                case 4: aVal = a.protocol || ''; bVal = b.protocol || ''; break;
+                case 5: aVal = a.total_octets; bVal = b.total_octets; break;
+                case 6: aVal = a.total_packets; bVal = b.total_packets; break;
+                case 7: aVal = a.flow_count; bVal = b.flow_count; break;
+                case 8: aVal = a.percentage; bVal = b.percentage; break;
+                default: return 0;
+            }
+
+            if (typeof aVal === 'string') {
+                return sortDirection * aVal.localeCompare(bVal);
+            }
+            return sortDirection * (aVal - bVal);
+        });
+
+        renderTable();
+    }
+
+    function updateStats(records, uniqueAddrs, octets, packets) {
+        document.getElementById('totalRecords').textContent = formatNumber(records);
+        document.getElementById('uniqueAddrs').textContent = formatNumber(uniqueAddrs);
+        document.getElementById('totalOctets').textContent = formatBytes(octets);
+        document.getElementById('totalPackets').textContent = formatNumber(packets);
+        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+    }
+
+    function resetFilters() {
+        document.getElementById('srcAddrFilter').value = '';
+        document.getElementById('dstAddrFilter').value = '';
+        document.getElementById('protocolFilter').value = '';
+        document.getElementById('srcPortFilter').value = '';
+        document.getElementById('dstPortFilter').value = '';
+        document.getElementById('srcASFilter').value = '';
+        document.getElementById('dstASFilter').value = '';
+        document.getElementById('minOctetsFilter').value = '';
+        document.getElementById('maxOctetsFilter').value = '';
+        initializeTimes();
+    }
+
+    // Event listeners
+    document.getElementById('exporterSelect').addEventListener('change', (e) => {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        const exporterId = selectedOption.dataset.id;
+        const exporterIp = e.target.value;
+        if (exporterId) {
+            loadInterfaces(exporterId);
+        }
+        if (exporterIp) {
+            loadDataRange(exporterIp);
+        }
+    });
+
+    document.getElementById('loadBtn').addEventListener('click', loadTrafficData);
+    document.getElementById('resetBtn').addEventListener('click', resetFilters);
+
+    document.getElementById('showChart').addEventListener('change', (e) => {
+        if (e.target.checked && currentData.length > 0) {
+            renderChart();
+        } else {
+            document.getElementById('trafficChart').style.display = 'none';
+        }
+    });
+
+    document.getElementById('autoRefresh').addEventListener('change', (e) => {
+        const indicator = document.getElementById('refreshIndicator');
+        if (e.target.checked) {
+            indicator.style.display = 'inline-block';
+            autoRefreshInterval = setInterval(loadTrafficData, 30000);
+        } else {
+            indicator.style.display = 'none';
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+    });
+
+    // Initialize
+    initializeTimes();
+    loadExporters();
+</script>
+</body>
+</html>

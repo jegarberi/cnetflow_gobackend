@@ -75,7 +75,7 @@ func getFlowsDB(exporter string, last string) ([]FlowGEO, string) {
 		last = "2000-01-01 00:00:00"
 	}
 	last = strings.Split(last, "+")[0]
-	query := fmt.Sprintf("select * from flows where exporter = $1::inet and last >= $2::timestamp ;  ")
+	query := fmt.Sprintf("select * from flows where exporter = $1::inet and last AT TIME ZONE 'UTC' >= $2::timestamp ;  ")
 	log.Println(query)
 	rows, err = config.Db.Query(query, exporter, last)
 	if err != nil {
@@ -331,7 +331,7 @@ func getInterfacesMetrics(exporter string, interfac string, start time.Time, end
 	log.Println("start: ", start.Format("2006-01-02T15:04"))
 	log.Println("end : ", start.Format("2006-01-02T15:04"))
 
-	rows, err = config.Db.Query("select inserted_at,octets_in,octets_out from interface_metrics where exporter = $1 and snmp_index = $2 and (inserted_at >= $3 and inserted_at <= $4 )", exporter, interfac, start.Format("2006-01-02T15:04"), end.Format("2006-01-02T15:04"))
+	rows, err = config.Db.Query("select inserted_at,octets_in,octets_out from interface_metrics where exporter = $1 and snmp_index = $2 and (inserted_at AT TIME ZONE 'UTC' >= $3 and inserted_at AT TIME ZONE 'UTC' <= $4 )", exporter, interfac, start.Format("2006-01-02T15:04"), end.Format("2006-01-02T15:04"))
 	if err != nil {
 		return nil, err
 	}
@@ -740,6 +740,18 @@ func main() {
 	mux.HandleFunc("/api/v1/flows/{exporter}", getFlowsRequest)
 	mux.HandleFunc("/api/v1/flows/{exporter}/{last}", getFlowsRequest)
 	mux.HandleFunc("/api/v1/query/{path...}", handleQueryRequest)
+
+	// New traffic API endpoints with comprehensive filtering
+	mux.HandleFunc("/api/v1/traffic", getTrafficRequest)
+	mux.HandleFunc("/api/v1/traffic/raw", getRawFlowsRequest)
+	mux.HandleFunc("/api/v1/traffic/data-range", getDataRangeRequest)
+
+	// Protocol analysis endpoint
+	mux.HandleFunc("/api/v1/protocols", getProtocolAnalysisRequest)
+
+	// IP enrichment endpoints
+	mux.HandleFunc("/api/v1/enrichment", getEnrichmentRequest)
+	mux.HandleFunc("/api/v1/enrichment/bulk", getBulkEnrichmentRequest)
 
 	mux.Handle("/", http.StripPrefix("", fileServer))
 	err = http.ListenAndServe(config.Bind_address, mux)

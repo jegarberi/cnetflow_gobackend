@@ -1,6 +1,532 @@
-<div id="traffic" style="min-width: 310px; height: 400px; margin: 0 auto"></div>
-<div id="bytes_in_src" style="min-width: 310px; height: 400px; margin: 0 auto"></div>
-<div id="bytes_in_dst" style="min-width: 310px; height: 400px; margin: 0 auto"></div>
-<div id="bytes_out_src" style="min-width: 310px; height: 400px; margin: 0 auto"></div>
-<div id="bytes_out_dst" style="min-width: 310px; height: 400px; margin: 0 auto"></div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetFlow Interface Metrics</title>
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <script src="js/highcharts.js"></script>
+    <script src="js/exporting.js"></script>
+    <script src="js/export-data.js"></script>
+    <script src="js/accessibility.js"></script>
+    <script src="js/cache.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 15px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .filter-group button {
+            padding: 10px 20px;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+
+        .filter-group button:hover {
+            background-color: #5568d3;
+        }
+
+        .filter-group button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .chart-section {
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 16px;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="/dashboard.html" class="back-link">← Back to Dashboard</a>
+
+    <h1>📈 Interface Traffic Metrics</h1>
+
+    <div class="filters">
+        <div class="filter-group">
+            <label for="exporterSelect">Exporter *</label>
+            <select id="exporterSelect">
+                <option value="">Loading...</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="interfaceSelect">Interface *</label>
+            <select id="interfaceSelect" disabled>
+                <option value="">Select exporter first</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="startDateTime">Start Time</label>
+            <input type="datetime-local" id="startDateTime">
+        </div>
+
+        <div class="filter-group">
+            <label for="endDateTime">End Time</label>
+            <input type="datetime-local" id="endDateTime">
+        </div>
+
+        <div class="filter-group">
+            <label for="autoRefresh">
+                <input type="checkbox" id="autoRefresh" style="width: auto; margin-right: 5px;">
+                Auto-refresh (1 min)
+            </label>
+        </div>
+
+        <div class="filter-group" style="justify-content: flex-end;">
+            <label>&nbsp;</label>
+            <button id="loadBtn">Load Metrics</button>
+        </div>
+    </div>
+
+    <div id="errorContainer"></div>
+
+    <div class="chart-section">
+        <div class="chart-container">
+            <div id="traffic" style="height: 400px;"></div>
+        </div>
+
+        <div class="chart-container">
+            <div id="bytes_in_src" style="height: 400px;"></div>
+        </div>
+
+        <div class="chart-container">
+            <div id="bytes_in_dst" style="height: 400px;"></div>
+        </div>
+
+        <div class="chart-container">
+            <div id="bytes_out_src" style="height: 400px;"></div>
+        </div>
+
+        <div class="chart-container">
+            <div id="bytes_out_dst" style="height: 400px;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let allExporters = {};
+    let allInterfaces = {};
+    let trafficChart = null;
+
+    // Set Highcharts timezone to UTC-3
+    if (window.Highcharts && Highcharts.setOptions) {
+        Highcharts.setOptions({
+            time: {
+                useUTC: true,
+                timezoneOffset: 3 * 60 // minutes west of UTC; +180 = UTC-3
+            }
+        });
+    }
+
+    // Initialize with default times (last 24 hours)
+    function initializeTimes() {
+        const now = new Date();
+        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+        document.getElementById('startDateTime').value = formatDateTimeLocal(oneDayAgo);
+        document.getElementById('endDateTime').value = formatDateTimeLocal(now);
+    }
+
+    function formatDateTimeLocal(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+
+    function showError(message) {
+        const errorContainer = document.getElementById('errorContainer');
+        errorContainer.innerHTML = `<div class="error"><strong>Error:</strong> ${message}</div>`;
+        setTimeout(() => {
+            errorContainer.innerHTML = '';
+        }, 8000);
+    }
+
+    async function loadExporters() {
+        try {
+            const result = await cache.fetchWithCache('/api/v1/exporters/json', {}, CacheTTL.LONG);
+            const exporters = result.data;
+            allExporters = exporters;
+
+            const select = document.getElementById('exporterSelect');
+            select.innerHTML = '<option value="">-- Select Exporter --</option>';
+
+            for (const id in exporters) {
+                const exp = exporters[id];
+                const option = document.createElement('option');
+                option.value = exp.ip_inet;
+                option.dataset.id = id;
+                option.textContent = `${exp.name} [${exp.ip_inet}]`;
+                select.appendChild(option);
+            }
+        } catch (error) {
+            console.error('Error loading exporters:', error);
+            showError('Failed to load exporters: ' + error.message);
+        }
+    }
+
+    async function loadInterfaces(exporterId) {
+        const interfaceSelect = document.getElementById('interfaceSelect');
+        interfaceSelect.disabled = true;
+        interfaceSelect.innerHTML = '<option value="">Loading...</option>';
+
+        try {
+            const result = await cache.fetchWithCache(`/api/v1/interfaces/${exporterId}/json`, {}, CacheTTL.LONG);
+            const interfaces = result.data;
+            allInterfaces[exporterId] = interfaces;
+
+            interfaceSelect.innerHTML = '<option value="">-- Select Interface --</option>';
+
+            interfaces.forEach(iface => {
+                const option = document.createElement('option');
+                option.value = iface.snmp_if;
+                option.textContent = `[${iface.snmp_if}] ${iface.description || iface.name || 'Interface'}`;
+                interfaceSelect.appendChild(option);
+            });
+
+            interfaceSelect.disabled = false;
+        } catch (error) {
+            console.error('Error loading interfaces:', error);
+            showError('Failed to load interfaces: ' + error.message);
+            interfaceSelect.innerHTML = '<option value="">Error loading interfaces</option>';
+        }
+    }
+
+    async function loadMetrics() {
+        const exporterSelect = document.getElementById('exporterSelect');
+        const selectedOption = exporterSelect.options[exporterSelect.selectedIndex];
+        const exporterId = selectedOption?.dataset?.id || '';
+        const interfaceId = document.getElementById('interfaceSelect').value;
+        const startTime = document.getElementById('startDateTime').value;
+        const endTime = document.getElementById('endDateTime').value;
+
+        if (!exporterId) {
+            showError('Please select an exporter');
+            return;
+        }
+        if (!interfaceId) {
+            showError('Please select an interface');
+            return;
+        }
+        if (!startTime || !endTime) {
+            showError('Please select start and end times');
+            return;
+        }
+
+        // Show loading indicators
+        document.getElementById('traffic').innerHTML = '<div class="loading">Loading interface metrics...</div>';
+        document.getElementById('bytes_in_src').innerHTML = '<div class="loading">Loading flow data...</div>';
+        document.getElementById('bytes_in_dst').innerHTML = '<div class="loading">Loading flow data...</div>';
+        document.getElementById('bytes_out_src').innerHTML = '<div class="loading">Loading flow data...</div>';
+        document.getElementById('bytes_out_dst').innerHTML = '<div class="loading">Loading flow data...</div>';
+
+        try {
+            // Load interface metrics (traffic rate chart)
+            await loadInterfaceMetricsChart(exporterId, interfaceId, startTime, endTime);
+
+            // Load flow charts (pie charts for top talkers)
+            await loadFlowCharts(exporterId, interfaceId, startTime, endTime);
+
+        } catch (error) {
+            console.error('Error loading metrics:', error);
+            showError('Error loading metrics: ' + error.message);
+        }
+    }
+
+    async function loadInterfaceMetricsChart(exporterId, interfaceId, startTime, endTime) {
+        try {
+            // Query interface_metrics table via backend
+            const startISO = new Date(startTime).toISOString();
+            const endISO = new Date(endTime).toISOString();
+
+            const url = `/api/v1/metrics/${exporterId}/${interfaceId}`;
+            console.log('Fetching:', url);
+
+            // Since the existing endpoint doesn't support date params, we'll query the aggregated flow data instead
+            // Use PostgREST for more flexible querying
+            const postgrestUrl = 'http://192.168.100.78:3003/';
+            const query = `${postgrestUrl}interface_metrics?exporter=eq.${exporterId}&snmp_index=eq.${interfaceId}&inserted_at=gte.${startTime}&inserted_at=lte.${endTime}&order=inserted_at.asc`;
+
+            const result = await cache.fetchWithCache(query, {}, CacheTTL.SHORT);
+            const data = result.data;
+
+            if (!data || data.length === 0) {
+                document.getElementById('traffic').innerHTML = '<div class="loading">No interface metrics found</div>';
+                return;
+            }
+
+            // Calculate bits per second from octet deltas
+            const seriesIn = [];
+            const seriesOut = [];
+
+            for (let i = 1; i < data.length; i++) {
+                const prev = data[i - 1];
+                const curr = data[i];
+                const lastTime = Math.floor(Date.parse(prev.inserted_at) / 1000);
+                const nowTime = Math.floor(Date.parse(curr.inserted_at) / 1000);
+                const interval = Math.max(1, nowTime - lastTime);
+
+                let rateIn = Math.floor(8 * (curr.octets_in - prev.octets_in) / interval);
+                let rateOut = Math.floor(8 * (curr.octets_out - prev.octets_out) / interval);
+
+                if (rateIn < 0) rateIn = 0;
+                if (rateOut < 0) rateOut = 0;
+
+                const timestamp = Date.parse(curr.inserted_at);
+                seriesIn.push([timestamp, rateIn]);
+                seriesOut.push([timestamp, rateOut]);
+            }
+
+            // Render chart
+            Highcharts.chart('traffic', {
+                title: { text: 'Interface Traffic Rate', align: 'left' },
+                subtitle: { text: 'bits per second (in/out)', align: 'left' },
+                chart: { zoomType: 'x' },
+                xAxis: { type: 'datetime' },
+                yAxis: { title: { text: 'bits/s' } },
+                legend: { layout: 'horizontal', align: 'left', verticalAlign: 'top' },
+                tooltip: {
+                    shared: true,
+                    valueSuffix: ' bps',
+                    valueDecimals: 0
+                },
+                series: [
+                    { type: 'line', name: 'bits/s in', data: seriesIn, color: '#667eea' },
+                    { type: 'line', name: 'bits/s out', data: seriesOut, color: '#764ba2' }
+                ]
+            });
+
+        } catch (error) {
+            console.error('Error loading interface metrics chart:', error);
+            document.getElementById('traffic').innerHTML = `<div class="error">Failed to load interface metrics: ${error.message}</div>`;
+        }
+    }
+
+    async function loadFlowCharts(exporterId, interfaceId, startTime, endTime) {
+        try {
+            const startISO = new Date(startTime).toISOString();
+            const endISO = new Date(endTime).toISOString();
+            const postgrestUrl = 'http://192.168.100.78:3003/';
+
+            // Load flow data for different directions and sources/destinations
+            const queries = [
+                { id: 'bytes_in_src', direction: 'input', field: 'srcaddr', title: 'Top Sources (Input)' },
+                { id: 'bytes_in_dst', direction: 'input', field: 'dstaddr', title: 'Top Destinations (Input)' },
+                { id: 'bytes_out_src', direction: 'output', field: 'srcaddr', title: 'Top Sources (Output)' },
+                { id: 'bytes_out_dst', direction: 'output', field: 'dstaddr', title: 'Top Destinations (Output)' }
+            ];
+
+            for (const q of queries) {
+                try {
+                    // Use the Go backend API instead of PostgREST for consistent results
+                    const exporterIp = document.getElementById('exporterSelect').value;
+                    const params = new URLSearchParams({
+                        exporter: exporterIp,
+                        interface: interfaceId,
+                        direction: q.direction,
+                        start: new Date(startTime).toISOString(),
+                        end: new Date(endTime).toISOString(),
+                        limit: 10,
+                        group_by: 'address'
+                    });
+
+                    const apiUrl = `/api/v1/traffic?${params.toString()}`;
+                    console.log('Loading flow chart:', q.title, apiUrl);
+
+                    const cacheResult = await cache.fetchWithCache(apiUrl, { params: Object.fromEntries(params) }, CacheTTL.MEDIUM);
+                    const result = cacheResult.data;
+                    const data = result.records || [];
+
+                    if (!data || data.length === 0) {
+                        document.getElementById(q.id).innerHTML = '<div class="loading">No flow data found</div>';
+                        continue;
+                    }
+
+                    // Prepare pie chart data
+                    const chartData = data.map(item => ({
+                        name: item.address || 'Unknown',
+                        y: item.total_octets || 0
+                    }));
+
+                    // Render pie chart
+                    Highcharts.chart(q.id, {
+                        chart: { type: 'pie' },
+                        title: { text: q.title, align: 'left' },
+                        tooltip: {
+                            pointFormat: '{series.name}: <b>{point.percentage:.1f}%</b><br/>Bytes: <b>{point.y:,.0f}</b>'
+                        },
+                        plotOptions: {
+                            pie: {
+                                allowPointSelect: true,
+                                cursor: 'pointer',
+                                dataLabels: {
+                                    enabled: true,
+                                    format: '<b>{point.name}</b>: {point.percentage:.1f}%'
+                                }
+                            }
+                        },
+                        series: [{
+                            name: 'Traffic',
+                            colorByPoint: true,
+                            data: chartData
+                        }]
+                    });
+
+                } catch (error) {
+                    console.error(`Error loading ${q.title}:`, error);
+                    document.getElementById(q.id).innerHTML = `<div class="error">Failed to load ${q.title}: ${error.message}</div>`;
+                }
+            }
+
+        } catch (error) {
+            console.error('Error loading flow charts:', error);
+            showError('Failed to load flow charts: ' + error.message);
+        }
+    }
+
+    // Auto-refresh functionality
+    let refreshInterval = null;
+
+    function startAutoRefresh() {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+        }
+        refreshInterval = setInterval(() => {
+            console.log('Auto-refreshing metrics...');
+            loadMetrics();
+        }, 60000); // 60000ms = 1 minute
+    }
+
+    function stopAutoRefresh() {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+            refreshInterval = null;
+        }
+    }
+
+    // Event listeners
+    document.getElementById('exporterSelect').addEventListener('change', (e) => {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        const exporterId = selectedOption.dataset.id;
+        if (exporterId) {
+            loadInterfaces(exporterId);
+        }
+    });
+
+    document.getElementById('loadBtn').addEventListener('click', loadMetrics);
+
+    document.getElementById('autoRefresh').addEventListener('change', (e) => {
+        if (e.target.checked) {
+            startAutoRefresh();
+            console.log('Auto-refresh enabled');
+        } else {
+            stopAutoRefresh();
+            console.log('Auto-refresh disabled');
+        }
+    });
+
+    // Initialize
+    initializeTimes();
+    loadExporters();
+</script>
+</body>
+</html>

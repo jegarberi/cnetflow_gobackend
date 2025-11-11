@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetFlow Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+
+        .card-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .card-description {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .card-features {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .card-features ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .card-features li {
+            padding: 5px 0;
+            color: #555;
+            font-size: 13px;
+        }
+
+        .card-features li:before {
+            content: "✓ ";
+            color: #667eea;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .card-1 {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        }
+
+        .card-2 {
+            background: linear-gradient(135deg, rgba(240, 147, 251, 0.1) 0%, rgba(245, 87, 108, 0.1) 100%);
+        }
+
+        .card-3 {
+            background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.1) 100%);
+        }
+
+        .card-4 {
+            background: linear-gradient(135deg, rgba(67, 233, 123, 0.1) 0%, rgba(56, 249, 215, 0.1) 100%);
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 50px;
+            color: white;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            .cards {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 36px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 NetFlow Dashboard</h1>
+            <p>Comprehensive Network Traffic Analysis and Monitoring</p>
+        </div>
+
+        <div class="cards">
+            <a href="/traffic.html" class="card card-1">
+                <div class="card-icon">🌊</div>
+                <div class="card-title">Advanced Traffic Analysis</div>
+                <div class="card-description">
+                    Comprehensive traffic analysis with advanced filtering and aggregation capabilities.
+                </div>
+                <div class="card-features">
+                    <ul>
+                        <li>Filter by source/destination IP, port, protocol, AS</li>
+                        <li>Aggregate by address or port combinations</li>
+                        <li>Volume-based filtering (min/max bytes/packets)</li>
+                        <li>Interactive charts and visualizations</li>
+                        <li>Auto-refresh with configurable intervals</li>
+                        <li>Export data for further analysis</li>
+                    </ul>
+                </div>
+            </a>
+
+            <a href="/flows.html" class="card card-2">
+                <div class="card-icon">📊</div>
+                <div class="card-title">Flow Viewer (Legacy)</div>
+                <div class="card-description">
+                    View aggregated 5-minute flow buckets with basic filtering and service resolution.
+                </div>
+                <div class="card-features">
+                    <ul>
+                        <li>5-minute aggregated flow data</li>
+                        <li>Basic IP and port filtering</li>
+                        <li>Service name resolution</li>
+                        <li>Network CIDR mapping</li>
+                        <li>Interface traffic rate charts</li>
+                        <li>Real-time updates</li>
+                    </ul>
+                </div>
+            </a>
+
+            <a href="/highcharts.html" class="card card-3">
+                <div class="card-icon">📈</div>
+                <div class="card-title">Interface Metrics</div>
+                <div class="card-description">
+                    Monitor interface traffic rates with interactive time-series charts.
+                </div>
+                <div class="card-features">
+                    <ul>
+                        <li>Real-time traffic rate monitoring</li>
+                        <li>In/Out traffic visualization</li>
+                        <li>Zoomable time-series charts</li>
+                        <li>Multiple interface comparison</li>
+                        <li>Historical data analysis</li>
+                        <li>Export chart images</li>
+                    </ul>
+                </div>
+            </a>
+
+            <a href="/protocols.html" class="card card-4">
+                <div class="card-icon">🔬</div>
+                <div class="card-title">Protocol Analysis</div>
+                <div class="card-description">
+                    Deep dive into protocol usage with statistical analysis and time-series visualization.
+                </div>
+                <div class="card-features">
+                    <ul>
+                        <li>Protocol distribution and statistics</li>
+                        <li>Top protocol+port combinations</li>
+                        <li>Average packet size analysis</li>
+                        <li>Time-series protocol trends</li>
+                        <li>Service name resolution</li>
+                        <li>Interactive charts (pie, bar, line)</li>
+                    </ul>
+                </div>
+            </a>
+
+            <a href="/world.html" class="card card-1">
+                <div class="card-icon">🌍</div>
+                <div class="card-title">Geographic Visualization</div>
+                <div class="card-description">
+                    Visualize network flows on a world map with GeoIP location data.
+                </div>
+                <div class="card-features">
+                    <ul>
+                        <li>Interactive world map visualization</li>
+                        <li>GeoIP-based location mapping</li>
+                        <li>Flow volume by geographic region</li>
+                        <li>Source/destination path visualization</li>
+                        <li>Aggregated traffic by location</li>
+                        <li>Distance calculation</li>
+                    </ul>
+                </div>
+            </a>
+        </div>
+
+        <div class="footer">
+            <p>NetFlow Backend v1.0 | Built with Go, PostgreSQL, and Highcharts</p>
+        </div>
+    </div>
+</body>
+</html>

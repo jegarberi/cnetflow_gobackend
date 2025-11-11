@@ -416,7 +416,7 @@ func getFlowMetricsForChart(r *http.Request) ([]FlowData, error) {
 	*/
 	rows, err := config.Db.Query("select bucket_5min,exporter,srcaddr,dstaddr,srcport,dstport,src_as,dst_as,total_packets,total_octets,input,output from flows_agg_5min where exporter=$1 and "+
 		input_or_output+
-		" = $2 and bucket_5min >= $3 and bucket_5min <= $4 ",
+		" = $2 and bucket_5min AT TIME ZONE 'UTC' >= $3 and bucket_5min AT TIME ZONE 'UTC' <= $4 ",
 		exporterInet, interfaceStr, start, end)
 	if err != nil {
 		return nil, err

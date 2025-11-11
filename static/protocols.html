@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protocol Analysis</title>
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <script src="js/highcharts.js"></script>
+    <script src="js/exporting.js"></script>
+    <script src="js/export-data.js"></script>
+    <script src="js/accessibility.js"></script>
+    <script src="js/cache.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1900px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 32px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .back-link {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .filters-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            color: #555;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .filter-group select:disabled {
+            background-color: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .stat-card:nth-child(1) { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .stat-card:nth-child(2) { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .stat-card:nth-child(3) { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .stat-card:nth-child(4) { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.95;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .chart-container {
+            margin-bottom: 25px;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        th {
+            padding: 14px 10px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 12px;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #e0e0e0;
+            transition: background-color 0.2s;
+        }
+
+        tbody tr:hover {
+            background-color: #f0f4ff;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        td {
+            padding: 12px 10px;
+            color: #333;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+            font-size: 18px;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #f5c6cb;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-tcp { background-color: #d4edda; color: #155724; }
+        .badge-udp { background-color: #d1ecf1; color: #0c5460; }
+        .badge-icmp { background-color: #fff3cd; color: #856404; }
+        .badge-other { background-color: #e7e7e7; color: #383838; }
+
+        .progress-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .progress-track {
+            flex: 1;
+            background: #e9ecef;
+            border-radius: 4px;
+            height: 20px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s;
+        }
+
+        .progress-value {
+            min-width: 60px;
+            text-align: right;
+            font-weight: 600;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>📊 Protocol Analysis</h1>
+        <a href="/dashboard.html" class="back-link">← Back to Dashboard</a>
+    </div>
+
+    <div class="filters-section">
+        <div class="filters">
+            <div class="filter-group">
+                <label for="exporterSelect">Exporter *</label>
+                <select id="exporterSelect">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="interfaceSelect">Interface *</label>
+                <select id="interfaceSelect" disabled>
+                    <option value="">Select exporter first</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="directionSelect">Direction</label>
+                <select id="directionSelect">
+                    <option value="input">Input</option>
+                    <option value="output">Output</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="startDateTime">Start Time *</label>
+                <input type="datetime-local" id="startDateTime" required>
+            </div>
+
+            <div class="filter-group">
+                <label for="endDateTime">End Time *</label>
+                <input type="datetime-local" id="endDateTime" required>
+            </div>
+
+            <div class="filter-group">
+                <label for="protocolFilter">Filter Protocol</label>
+                <select id="protocolFilter">
+                    <option value="">All Protocols</option>
+                    <option value="1">ICMP (1)</option>
+                    <option value="6">TCP (6)</option>
+                    <option value="17">UDP (17)</option>
+                    <option value="41">IPv6 (41)</option>
+                    <option value="47">GRE (47)</option>
+                    <option value="50">ESP (50)</option>
+                    <option value="51">AH (51)</option>
+                    <option value="58">ICMPv6 (58)</option>
+                    <option value="89">OSPF (89)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button id="loadBtn" class="btn btn-primary">🔍 Analyze Protocols</button>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-label">Total Bytes</div>
+            <div class="stat-value" id="totalOctets">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Packets</div>
+            <div class="stat-value" id="totalPackets">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Flows</div>
+            <div class="stat-value" id="totalFlows">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Protocols</div>
+            <div class="stat-value" id="protocolCount">-</div>
+        </div>
+    </div>
+
+    <div id="errorContainer"></div>
+
+    <div class="charts-grid">
+        <div class="chart-container">
+            <div id="protocolPieChart" style="height: 400px;"></div>
+        </div>
+        <div class="chart-container">
+            <div id="protocolBarChart" style="height: 400px;"></div>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <div id="timeSeriesChart" style="height: 400px;"></div>
+    </div>
+
+    <h2 style="margin: 20px 0; color: #333;">Protocol Statistics</h2>
+    <div class="table-container">
+        <table id="protocolTable">
+            <thead>
+            <tr>
+                <th>#</th>
+                <th>Protocol</th>
+                <th>Total Bytes</th>
+                <th>Total Packets</th>
+                <th>Flow Count</th>
+                <th>Avg Packet Size</th>
+                <th>Percentage</th>
+            </tr>
+            </thead>
+            <tbody id="protocolBody">
+            <tr>
+                <td colspan="7" class="loading">Configure filters and click "Analyze Protocols"</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2 style="margin: 20px 0; color: #333;">Top Protocol + Port Combinations</h2>
+    <div class="table-container">
+        <table id="portsTable">
+            <thead>
+            <tr>
+                <th>#</th>
+                <th>Protocol</th>
+                <th>Src Port</th>
+                <th>Dst Port</th>
+                <th>Service</th>
+                <th>Total Bytes</th>
+                <th>Total Packets</th>
+                <th>Percentage</th>
+            </tr>
+            </thead>
+            <tbody id="portsBody">
+            <tr>
+                <td colspan="8" class="loading">No data loaded yet</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let allExporters = {};
+    let allInterfaces = {};
+    let dataRange = { min: null, max: null };
+
+    function initializeTimes() {
+        const now = new Date();
+        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+        document.getElementById('startDateTime').value = formatDateTimeLocal(oneHourAgo);
+        document.getElementById('endDateTime').value = formatDateTimeLocal(now);
+    }
+
+    async function loadDataRange(exporter) {
+        if (!exporter) return;
+        try {
+            const result = await cache.fetchWithCache(`/api/v1/traffic/data-range?exporter=${exporter}`, {}, CacheTTL.MEDIUM);
+            const data = result.data;
+            if (data.min_time && data.max_time) {
+                dataRange.min = new Date(data.min_time);
+                dataRange.max = new Date(data.max_time);
+                const endTime = dataRange.max;
+                const startTime = new Date(endTime.getTime() - 60 * 60 * 1000);
+                document.getElementById('startDateTime').value = formatDateTimeLocal(startTime);
+                document.getElementById('endDateTime').value = formatDateTimeLocal(endTime);
+            }
+        } catch (error) {
+            console.error('Error loading data range:', error);
+        }
+    }
+
+    function formatDateTimeLocal(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function formatNumber(num) {
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    function showError(message) {
+        const errorContainer = document.getElementById('errorContainer');
+        errorContainer.innerHTML = `<div class="error"><strong>Error:</strong> ${message}</div>`;
+        setTimeout(() => { errorContainer.innerHTML = ''; }, 8000);
+    }
+
+    function getProtocolBadge(protocolName) {
+        if (protocolName.includes('TCP')) return `<span class="badge badge-tcp">${protocolName}</span>`;
+        if (protocolName.includes('UDP')) return `<span class="badge badge-udp">${protocolName}</span>`;
+        if (protocolName.includes('ICMP')) return `<span class="badge badge-icmp">${protocolName}</span>`;
+        return `<span class="badge badge-other">${protocolName}</span>`;
+    }
+
+    async function loadExporters() {
+        try {
+            const result = await cache.fetchWithCache('/api/v1/exporters/json', {}, CacheTTL.LONG);
+            const exporters = result.data;
+            allExporters = exporters;
+            const select = document.getElementById('exporterSelect');
+            select.innerHTML = '<option value="">-- Select Exporter --</option>';
+            for (const id in exporters) {
+                const exp = exporters[id];
+                const option = document.createElement('option');
+                option.value = exp.ip_inet;
+                option.dataset.id = id;
+                option.textContent = `${exp.name} [${exp.ip_inet}]`;
+                select.appendChild(option);
+            }
+        } catch (error) {
+            console.error('Error loading exporters:', error);
+            showError('Failed to load exporters: ' + error.message);
+        }
+    }
+
+    async function loadInterfaces(exporterId) {
+        const interfaceSelect = document.getElementById('interfaceSelect');
+        interfaceSelect.disabled = true;
+        interfaceSelect.innerHTML = '<option value="">Loading...</option>';
+        try {
+            const result = await cache.fetchWithCache(`/api/v1/interfaces/${exporterId}/json`, {}, CacheTTL.LONG);
+            const interfaces = result.data;
+            allInterfaces[exporterId] = interfaces;
+            interfaceSelect.innerHTML = '<option value="">-- Select Interface --</option>';
+            interfaces.forEach(iface => {
+                const option = document.createElement('option');
+                option.value = iface.snmp_if;
+                option.textContent = `[${iface.snmp_if}] ${iface.description || iface.name || 'Interface'}`;
+                interfaceSelect.appendChild(option);
+            });
+            interfaceSelect.disabled = false;
+        } catch (error) {
+            console.error('Error loading interfaces:', error);
+            showError('Failed to load interfaces: ' + error.message);
+            interfaceSelect.innerHTML = '<option value="">Error loading interfaces</option>';
+        }
+    }
+
+    async function loadProtocolAnalysis() {
+        const exporter = document.getElementById('exporterSelect').value;
+        const interfaceId = document.getElementById('interfaceSelect').value;
+        const direction = document.getElementById('directionSelect').value;
+        const startTime = document.getElementById('startDateTime').value;
+        const endTime = document.getElementById('endDateTime').value;
+        const protocol = document.getElementById('protocolFilter').value;
+
+        if (!exporter || !interfaceId || !startTime || !endTime) {
+            showError('Please fill in all required fields');
+            return;
+        }
+
+        const tbody = document.getElementById('protocolBody');
+        const portsBody = document.getElementById('portsBody');
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading protocol analysis...</td></tr>';
+        portsBody.innerHTML = '<tr><td colspan="8" class="loading">Loading...</td></tr>';
+
+        try {
+            const params = new URLSearchParams({
+                exporter: exporter,
+                interface: interfaceId,
+                direction: direction,
+                start: new Date(startTime).toISOString(),
+                end: new Date(endTime).toISOString(),
+                include_timeseries: 'true',
+                include_ports: 'true',
+                port_limit: '20'
+            });
+
+            if (protocol) params.append('protocol', protocol);
+
+            const result = await cache.fetchWithCache(`/api/v1/protocols?${params.toString()}`, { params: Object.fromEntries(params) }, CacheTTL.MEDIUM);
+            const data = result.data;
+
+            // Update stats
+            document.getElementById('totalOctets').textContent = formatBytes(data.total_octets);
+            document.getElementById('totalPackets').textContent = formatNumber(data.total_packets);
+            document.getElementById('totalFlows').textContent = formatNumber(data.total_flows);
+            document.getElementById('protocolCount').textContent = data.protocol_stats?.length || 0;
+
+            // Render protocol table
+            renderProtocolTable(data.protocol_stats || []);
+
+            // Render ports table
+            renderPortsTable(data.top_ports || []);
+
+            // Render charts
+            renderProtocolCharts(data.protocol_stats || []);
+            renderTimeSeriesChart(data.time_series || []);
+
+        } catch (error) {
+            console.error('Error loading protocol analysis:', error);
+            showError('Error loading protocol analysis: ' + error.message);
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">Error loading data</td></tr>';
+        }
+    }
+
+    function renderProtocolTable(stats) {
+        const tbody = document.getElementById('protocolBody');
+        if (!stats || stats.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">No protocol data found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = stats.map((stat, index) => `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${getProtocolBadge(stat.protocol_name)}</td>
+                <td>${formatBytes(stat.total_octets)}</td>
+                <td>${formatNumber(stat.total_packets)}</td>
+                <td>${formatNumber(stat.flow_count)}</td>
+                <td>${formatBytes(stat.avg_packet_size)}</td>
+                <td>
+                    <div class="progress-bar">
+                        <div class="progress-track">
+                            <div class="progress-fill" style="width: ${stat.percentage}%;"></div>
+                        </div>
+                        <span class="progress-value">${stat.percentage.toFixed(2)}%</span>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function renderPortsTable(ports) {
+        const tbody = document.getElementById('portsBody');
+        if (!ports || ports.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="loading">No port data found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = ports.map((port, index) => `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${getProtocolBadge(port.protocol_name)}</td>
+                <td>${port.srcport || '-'}</td>
+                <td>${port.dstport || '-'}</td>
+                <td>${port.service_name || '-'}</td>
+                <td>${formatBytes(port.total_octets)}</td>
+                <td>${formatNumber(port.total_packets)}</td>
+                <td>${port.percentage.toFixed(2)}%</td>
+            </tr>
+        `).join('');
+    }
+
+    function renderProtocolCharts(stats) {
+        if (!stats || stats.length === 0) return;
+
+        const pieData = stats.map(s => ({ name: s.protocol_name, y: s.total_octets }));
+        const barCategories = stats.map(s => s.protocol_name);
+        const barData = stats.map(s => s.total_octets);
+
+        // Pie chart
+        Highcharts.chart('protocolPieChart', {
+            chart: { type: 'pie' },
+            title: { text: 'Protocol Distribution (by Bytes)', align: 'left' },
+            tooltip: { pointFormat: '{series.name}: <b>{point.percentage:.1f}%</b><br/>Bytes: <b>{point.y:,.0f}</b>' },
+            plotOptions: {
+                pie: {
+                    allowPointSelect: true,
+                    cursor: 'pointer',
+                    dataLabels: { enabled: true, format: '<b>{point.name}</b>: {point.percentage:.1f}%' }
+                }
+            },
+            series: [{ name: 'Traffic', colorByPoint: true, data: pieData }]
+        });
+
+        // Bar chart
+        Highcharts.chart('protocolBarChart', {
+            chart: { type: 'column' },
+            title: { text: 'Protocol Traffic Volume', align: 'left' },
+            xAxis: { categories: barCategories },
+            yAxis: { title: { text: 'Bytes' } },
+            tooltip: { valueSuffix: ' bytes' },
+            series: [{ name: 'Bytes', data: barData, color: '#667eea' }]
+        });
+    }
+
+    function renderTimeSeriesChart(timeSeries) {
+        if (!timeSeries || timeSeries.length === 0) {
+            document.getElementById('timeSeriesChart').innerHTML = '<div class="loading">No time series data available</div>';
+            return;
+        }
+
+        // Build series data
+        const protocolMap = {};
+        timeSeries.forEach(point => {
+            const timestamp = new Date(point.timestamp).getTime();
+            for (const [protocol, bytes] of Object.entries(point.protocol_data)) {
+                if (!protocolMap[protocol]) {
+                    protocolMap[protocol] = [];
+                }
+                protocolMap[protocol].push([timestamp, bytes]);
+            }
+        });
+
+        const series = Object.entries(protocolMap).map(([protocol, data]) => ({
+            name: `Protocol ${protocol}`,
+            data: data
+        }));
+
+        Highcharts.chart('timeSeriesChart', {
+            chart: { type: 'line', zoomType: 'x' },
+            title: { text: 'Protocol Traffic Over Time', align: 'left' },
+            xAxis: { type: 'datetime' },
+            yAxis: { title: { text: 'Bytes' } },
+            tooltip: { shared: true, valueSuffix: ' bytes' },
+            series: series
+        });
+    }
+
+    // Event listeners
+    document.getElementById('exporterSelect').addEventListener('change', (e) => {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        const exporterId = selectedOption.dataset.id;
+        const exporterIp = e.target.value;
+        if (exporterId) loadInterfaces(exporterId);
+        if (exporterIp) loadDataRange(exporterIp);
+    });
+
+    document.getElementById('loadBtn').addEventListener('click', loadProtocolAnalysis);
+
+    // Initialize
+    initializeTimes();
+    loadExporters();
+</script>
+</body>
+</html>

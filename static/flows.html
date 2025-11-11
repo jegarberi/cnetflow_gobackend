@@ -9,6 +9,7 @@
     <script src="js/exporting.js"></script>
     <script src="js/export-data.js"></script>
     <script src="js/accessibility.js"></script>
+    <script src="js/cache.js"></script>
     <style>
         * {
             margin: 0;
@@ -514,8 +515,8 @@
     // Load exporters
     async function loadExporters() {
         try {
-            const response = await fetch('/api/v1/exporters/json');
-            const exporters = await response.json();
+            const result = await cache.fetchWithCache('/api/v1/exporters/json', {}, CacheTTL.LONG);
+            const exporters = result.data;
             allExporters = exporters;
 
             const select = document.getElementById('exporterSelect');
@@ -538,8 +539,8 @@
     async function loadServices() {
         try {
 
-            const response = await fetch('/api/v1/services/json');
-            const services = await response.json();
+            const result = await cache.fetchWithCache('/api/v1/services/json', {}, CacheTTL.LONG);
+            const services = result.data;
             allServices = services;
 
             // Build service lookup map
@@ -603,11 +604,8 @@
     // Load service networks (CIDR -> name) and populate matcher
     async function loadServiceNetworks() {
         try {
-            const response = await fetch('/api/v1/service-networks');
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            const networks = await response.json();
+            const result = await cache.fetchWithCache('/api/v1/service-networks', {}, CacheTTL.LONG);
+            const networks = result.data;
             serviceNetworks = [];
             if (Array.isArray(networks)) {
                 networks.forEach(n => {
@@ -629,8 +627,8 @@
         interfaceSelect.innerHTML = '<option value="">Loading...</option>';
 
         try {
-            const response = await fetch(`/api/v1/interfaces/${exporterId}/json`);
-            const interfaces = await response.json();
+            const result = await cache.fetchWithCache(`/api/v1/interfaces/${exporterId}/json`, {}, CacheTTL.LONG);
+            const interfaces = result.data;
             allInterfaces[exporterId] = interfaces;
 
             interfaceSelect.innerHTML = '<option value="">-- Select Interface --</option>';

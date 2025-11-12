@@ -1,3 +1,4 @@
 /cnetflow_gobackend
 /.env
 /GeoLite2-City.mmdb
+build

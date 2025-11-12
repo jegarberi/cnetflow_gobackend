@@ -68,14 +68,14 @@ func getFlowsDB(exporter string, last string) ([]FlowGEO, string) {
 	var flowsGeo map[string]map[string]*FlowGEO
 	flowsGeo = make(map[string]map[string]*FlowGEO)
 	var max_last time.Time
-
+	max_last_str := last
 	var rows *sql.Rows
 	var err error
 	if last == "0" {
 		last = "2000-01-01 00:00:00"
 	}
 	last = strings.Split(last, "+")[0]
-	query := fmt.Sprintf("select * from flows where exporter = $1::inet and last AT TIME ZONE 'UTC' >= $2::timestamp ;  ")
+	query := fmt.Sprintf("select * from flows where exporter = $1::inet and last  >= $2::timestamp ;  ")
 	log.Println(query)
 	rows, err = config.Db.Query(query, exporter, last)
 	if err != nil {
@@ -113,11 +113,13 @@ func getFlowsDB(exporter string, last string) ([]FlowGEO, string) {
 			&flow.IPVersion,
 			&flow.First,
 			&flow.Last,
+			&flow.FlowHash,
 		)
 
 		flowGeo := FlowGEO{}
 		if flow.Last.Unix() > max_last.Unix() {
 			max_last = flow.Last
+			max_last_str = flow.Last.String()
 		}
 		if flow.SrcAddr > flow.DstAddr {
 			tmp := flow.SrcAddr
@@ -210,8 +212,13 @@ func getFlowsDB(exporter string, last string) ([]FlowGEO, string) {
 			FlowsGEOArray = append(FlowsGEOArray, *f2)
 		}
 	}
-	max_last_str := max_last.String()
-	max_last_str = strings.Split(max_last_str, "+")[0]
+	if strings.Split(max_last.String(), "+")[0] != "0001-01-01 00:00:00 " {
+		max_last_str = max_last.String()
+		max_last_str = strings.Split(max_last_str, "+")[0]
+	} else {
+		max_last_str = last
+	}
+
 	return FlowsGEOArray, max_last_str
 }
 

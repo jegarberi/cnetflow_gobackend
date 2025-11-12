@@ -4,11 +4,11 @@ FROM golang:1.25-alpine AS builder
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy go mod files
+# Copy go mod files first for dependency caching
 COPY go.mod go.sum ./
 
-# Download dependencies
-RUN go mod tidy
+# Download dependencies (this layer will be cached if go.mod/go.sum don't change)
+RUN go mod download
 
 # Copy source code
 COPY . .

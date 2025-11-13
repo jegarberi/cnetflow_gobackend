@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration - NetFlow Backend</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 42px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background 0.3s;
+        }
+
+        .back-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .section h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        thead {
+            background: #f8f9fa;
+        }
+
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e9ecef;
+            color: #333;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            margin-right: 5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #28a745;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .modal-header h3 {
+            color: #333;
+        }
+
+        .close {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-enabled {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-disabled {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .filter-controls {
+            margin-bottom: 20px;
+        }
+
+        .filter-controls select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+
+        @media (max-width: 768px) {
+            table {
+                font-size: 14px;
+            }
+
+            .modal-content {
+                width: 95%;
+                margin: 10% auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/dashboard.html" class="back-link">← Back to Dashboard</a>
+
+        <div class="header">
+            <h1>⚙️ Configuration</h1>
+            <p>Manage Exporters and Interfaces</p>
+        </div>
+
+        <div id="alert-container"></div>
+
+        <!-- Exporters Section -->
+        <div class="section">
+            <h2>Exporters</h2>
+            <div id="exporters-list" class="loading">Loading exporters...</div>
+        </div>
+
+        <!-- Interfaces Section -->
+        <div class="section">
+            <h2>Interfaces</h2>
+            <div class="filter-controls">
+                <label>Filter by Exporter:
+                    <select id="exporter-filter" onchange="filterInterfaces()">
+                        <option value="">All Exporters</option>
+                    </select>
+                </label>
+                <button class="btn btn-success" onclick="bulkEnableAll()">Enable All</button>
+                <button class="btn btn-danger" onclick="bulkDisableAll()">Disable All</button>
+            </div>
+            <div id="interfaces-list" class="loading">Loading interfaces...</div>
+        </div>
+    </div>
+
+    <!-- Exporter Edit Modal -->
+    <div id="exporter-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="close" onclick="closeExporterModal()">&times;</span>
+                <h3>Edit Exporter</h3>
+            </div>
+            <form id="exporter-form" onsubmit="saveExporter(event)">
+                <input type="hidden" id="exporter-id">
+
+                <div class="form-group">
+                    <label>Name:</label>
+                    <input type="text" id="exporter-name" required>
+                </div>
+
+                <div class="form-group">
+                    <label>IP Address:</label>
+                    <input type="text" id="exporter-ip" disabled>
+                </div>
+
+                <div class="form-group">
+                    <label>SNMP Version:</label>
+                    <select id="exporter-snmp-version" onchange="toggleSnmpFields()">
+                        <option value="1">SNMPv1</option>
+                        <option value="2">SNMPv2c</option>
+                        <option value="3">SNMPv3</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="community-field">
+                    <label>SNMP Community:</label>
+                    <input type="text" id="exporter-community">
+                </div>
+
+                <div class="form-group">
+                    <label>SNMP Config (Custom Key):</label>
+                    <input type="text" id="exporter-snmp-config" placeholder="e.g., additional config parameters">
+                    <small style="color: #666; display: block; margin-top: 5px;">Custom configuration value stored in data.snmp_config</small>
+                </div>
+
+                <div id="snmpv3-fields" style="display: none;">
+                    <div class="form-group">
+                        <label>SNMPv3 Username:</label>
+                        <input type="text" id="exporter-v3-username">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Security Level:</label>
+                        <select id="exporter-v3-level">
+                            <option value="noAuthNoPriv">No Auth, No Priv</option>
+                            <option value="authNoPriv">Auth, No Priv</option>
+                            <option value="authPriv">Auth and Priv</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Auth Protocol:</label>
+                        <select id="exporter-v3-auth-proto">
+                            <option value="">None</option>
+                            <option value="MD5">MD5</option>
+                            <option value="SHA">SHA</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Auth Password:</label>
+                        <input type="password" id="exporter-v3-auth-pass" placeholder="Leave blank to keep existing">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Privacy Protocol:</label>
+                        <select id="exporter-v3-priv-proto">
+                            <option value="">None</option>
+                            <option value="DES">DES</option>
+                            <option value="AES">AES</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Privacy Password:</label>
+                        <input type="password" id="exporter-v3-priv-pass" placeholder="Leave blank to keep existing">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <button type="button" class="btn btn-secondary" onclick="closeExporterModal()">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Interface Edit Modal -->
+    <div id="interface-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="close" onclick="closeInterfaceModal()">&times;</span>
+                <h3>Edit Interface</h3>
+            </div>
+            <form id="interface-form" onsubmit="saveInterface(event)">
+                <input type="hidden" id="interface-id">
+
+                <div class="form-group">
+                    <label>Interface Name:</label>
+                    <input type="text" id="interface-name" disabled>
+                </div>
+
+                <div class="form-group">
+                    <label>Alias:</label>
+                    <input type="text" id="interface-alias">
+                </div>
+
+                <div class="form-group">
+                    <label>Bandwidth (bps):</label>
+                    <input type="number" id="interface-bandwidth" min="0">
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="interface-enabled">
+                        Enabled
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <button type="button" class="btn btn-secondary" onclick="closeInterfaceModal()">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let exportersData = [];
+        let interfacesData = [];
+
+        function showAlert(message, type) {
+            const container = document.getElementById('alert-container');
+            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+
+        async function loadExporters() {
+            try {
+                const response = await fetch('/api/v1/config/exporters');
+                exportersData = await response.json();
+
+                let html = '<table><thead><tr><th>ID</th><th>Name</th><th>IP Address</th><th>SNMP Version</th><th>Actions</th></tr></thead><tbody>';
+
+                exportersData.forEach(exp => {
+                    const snmpVersion = exp.snmp_version === 1 ? 'v1' : exp.snmp_version === 2 ? 'v2c' : 'v3';
+                    html += `<tr>
+                        <td>${exp.id}</td>
+                        <td><strong>${exp.name}</strong></td>
+                        <td>${exp.ip_inet}</td>
+                        <td>${snmpVersion}</td>
+                        <td>
+                            <button class="btn btn-primary" onclick="editExporter(${exp.id})">Edit</button>
+                        </td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                document.getElementById('exporters-list').innerHTML = html;
+
+                // Populate exporter filter
+                const filter = document.getElementById('exporter-filter');
+                filter.innerHTML = '<option value="">All Exporters</option>';
+                exportersData.forEach(exp => {
+                    filter.innerHTML += `<option value="${exp.id}">${exp.name} (${exp.ip_inet})</option>`;
+                });
+
+            } catch (error) {
+                console.error('Error loading exporters:', error);
+                document.getElementById('exporters-list').innerHTML = '<p class="alert alert-error">Error loading exporters</p>';
+            }
+        }
+
+        async function loadInterfaces() {
+            try {
+                const exporterFilter = document.getElementById('exporter-filter').value;
+                const url = exporterFilter ? `/api/v1/config/interfaces?exporter=${exporterFilter}` : '/api/v1/config/interfaces';
+
+                const response = await fetch(url);
+                interfacesData = await response.json();
+
+                let html = '<table><thead><tr><th>Exporter</th><th>Index</th><th>Name</th><th>Description</th><th>Alias</th><th>Speed</th><th>Bandwidth</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+
+                interfacesData.forEach(iface => {
+                    const exporter = exportersData.find(e => e.id == iface.exporter);
+                    const exporterName = exporter ? exporter.name : iface.exporter;
+                    const statusBadge = iface.enabled ?
+                        '<span class="badge badge-enabled">Enabled</span>' :
+                        '<span class="badge badge-disabled">Disabled</span>';
+
+                    html += `<tr>
+                        <td>${exporterName}</td>
+                        <td>${iface.snmp_index}</td>
+                        <td><strong>${iface.name}</strong></td>
+                        <td>${iface.description}</td>
+                        <td>${iface.alias}</td>
+                        <td>${formatSpeed(iface.speed)}</td>
+                        <td>${formatSpeed(iface.bandwidth)}</td>
+                        <td>${statusBadge}</td>
+                        <td>
+                            <label class="toggle-switch">
+                                <input type="checkbox" ${iface.enabled ? 'checked' : ''}
+                                    onchange="toggleInterface(${iface.id}, this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                            <button class="btn btn-primary" onclick="editInterface(${iface.id})">Edit</button>
+                        </td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                document.getElementById('interfaces-list').innerHTML = html;
+
+            } catch (error) {
+                console.error('Error loading interfaces:', error);
+                document.getElementById('interfaces-list').innerHTML = '<p class="alert alert-error">Error loading interfaces</p>';
+            }
+        }
+
+        function formatSpeed(bps) {
+            if (!bps || bps === 0) return '-';
+            if (bps >= 1000000000) return (bps / 1000000000).toFixed(1) + ' Gbps';
+            if (bps >= 1000000) return (bps / 1000000).toFixed(1) + ' Mbps';
+            if (bps >= 1000) return (bps / 1000).toFixed(1) + ' Kbps';
+            return bps + ' bps';
+        }
+
+        function filterInterfaces() {
+            loadInterfaces();
+        }
+
+        function editExporter(id) {
+            const exporter = exportersData.find(e => e.id === id);
+            if (!exporter) return;
+
+            document.getElementById('exporter-id').value = exporter.id;
+            document.getElementById('exporter-name').value = exporter.name;
+            document.getElementById('exporter-ip').value = exporter.ip_inet;
+            document.getElementById('exporter-snmp-version').value = exporter.snmp_version;
+            document.getElementById('exporter-community').value = exporter.snmp_community;
+            document.getElementById('exporter-v3-username').value = exporter.snmpv3_username;
+            document.getElementById('exporter-v3-level').value = exporter.snmpv3_level;
+            document.getElementById('exporter-v3-auth-proto').value = exporter.snmpv3_auth_proto;
+            document.getElementById('exporter-v3-priv-proto').value = exporter.snmpv3_priv_proto;
+
+            // Load snmp_config from data field
+            const snmpConfig = (exporter.data && exporter.data.snmp_config) ? exporter.data.snmp_config : '';
+            document.getElementById('exporter-snmp-config').value = snmpConfig;
+
+            toggleSnmpFields();
+            document.getElementById('exporter-modal').style.display = 'block';
+        }
+
+        function toggleSnmpFields() {
+            const version = document.getElementById('exporter-snmp-version').value;
+            const communityField = document.getElementById('community-field');
+            const v3Fields = document.getElementById('snmpv3-fields');
+
+            if (version === '3') {
+                communityField.style.display = 'none';
+                v3Fields.style.display = 'block';
+            } else {
+                communityField.style.display = 'block';
+                v3Fields.style.display = 'none';
+            }
+        }
+
+        function closeExporterModal() {
+            document.getElementById('exporter-modal').style.display = 'none';
+        }
+
+        async function saveExporter(event) {
+            event.preventDefault();
+
+            const snmpConfigValue = document.getElementById('exporter-snmp-config').value;
+            const dataField = {};
+
+            // Add snmp_config to data field if provided
+            if (snmpConfigValue) {
+                dataField.snmp_config = snmpConfigValue;
+            }
+
+            const data = {
+                id: parseInt(document.getElementById('exporter-id').value),
+                name: document.getElementById('exporter-name').value,
+                snmp_version: parseInt(document.getElementById('exporter-snmp-version').value),
+                snmp_community: document.getElementById('exporter-community').value,
+                snmpv3_username: document.getElementById('exporter-v3-username').value,
+                snmpv3_level: document.getElementById('exporter-v3-level').value,
+                snmpv3_auth_proto: document.getElementById('exporter-v3-auth-proto').value,
+                snmpv3_auth_pass: document.getElementById('exporter-v3-auth-pass').value,
+                snmpv3_priv_proto: document.getElementById('exporter-v3-priv-proto').value,
+                snmpv3_priv_pass: document.getElementById('exporter-v3-priv-pass').value,
+                data: dataField
+            };
+
+            try {
+                const response = await fetch('/api/v1/config/exporters/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    showAlert('Exporter updated successfully', 'success');
+                    closeExporterModal();
+                    loadExporters();
+                } else {
+                    const error = await response.text();
+                    showAlert('Error updating exporter: ' + error, 'error');
+                }
+            } catch (error) {
+                showAlert('Error updating exporter: ' + error.message, 'error');
+            }
+        }
+
+        function editInterface(id) {
+            const iface = interfacesData.find(i => i.id === id);
+            if (!iface) return;
+
+            document.getElementById('interface-id').value = iface.id;
+            document.getElementById('interface-name').value = iface.name;
+            document.getElementById('interface-alias').value = iface.alias;
+            document.getElementById('interface-bandwidth').value = iface.bandwidth;
+            document.getElementById('interface-enabled').checked = iface.enabled;
+
+            document.getElementById('interface-modal').style.display = 'block';
+        }
+
+        function closeInterfaceModal() {
+            document.getElementById('interface-modal').style.display = 'none';
+        }
+
+        async function saveInterface(event) {
+            event.preventDefault();
+
+            const data = {
+                id: parseInt(document.getElementById('interface-id').value),
+                alias: document.getElementById('interface-alias').value,
+                bandwidth: parseInt(document.getElementById('interface-bandwidth').value),
+                enabled: document.getElementById('interface-enabled').checked
+            };
+
+            try {
+                const response = await fetch('/api/v1/config/interfaces/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    showAlert('Interface updated successfully', 'success');
+                    closeInterfaceModal();
+                    loadInterfaces();
+                } else {
+                    const error = await response.text();
+                    showAlert('Error updating interface: ' + error, 'error');
+                }
+            } catch (error) {
+                showAlert('Error updating interface: ' + error.message, 'error');
+            }
+        }
+
+        async function toggleInterface(id, enabled) {
+            const data = {
+                id: id,
+                enabled: enabled,
+                alias: '',
+                bandwidth: 0
+            };
+
+            try {
+                const response = await fetch('/api/v1/config/interfaces/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    showAlert(`Interface ${enabled ? 'enabled' : 'disabled'} successfully`, 'success');
+                    loadInterfaces();
+                } else {
+                    showAlert('Error updating interface', 'error');
+                    loadInterfaces(); // Reload to reset the toggle
+                }
+            } catch (error) {
+                showAlert('Error updating interface: ' + error.message, 'error');
+                loadInterfaces();
+            }
+        }
+
+        async function bulkEnableAll() {
+            const exporterFilter = document.getElementById('exporter-filter').value;
+            if (!exporterFilter) {
+                alert('Please select an exporter first');
+                return;
+            }
+
+            if (!confirm('Enable all interfaces for this exporter?')) return;
+
+            try {
+                const response = await fetch('/api/v1/config/interfaces/bulk-update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exporter_id: exporterFilter, enabled: true })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert(result.message, 'success');
+                    loadInterfaces();
+                } else {
+                    showAlert('Error enabling interfaces', 'error');
+                }
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'error');
+            }
+        }
+
+        async function bulkDisableAll() {
+            const exporterFilter = document.getElementById('exporter-filter').value;
+            if (!exporterFilter) {
+                alert('Please select an exporter first');
+                return;
+            }
+
+            if (!confirm('Disable all interfaces for this exporter?')) return;
+
+            try {
+                const response = await fetch('/api/v1/config/interfaces/bulk-update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exporter_id: exporterFilter, enabled: false })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert(result.message, 'success');
+                    loadInterfaces();
+                } else {
+                    showAlert('Error disabling interfaces', 'error');
+                }
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'error');
+            }
+        }
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+            }
+        }
+
+        // Initial load
+        loadExporters().then(() => loadInterfaces());
+    </script>
+</body>
+</html>

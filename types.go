@@ -104,3 +104,79 @@ type ServiceNetwork struct {
 	CIDR string `json:"cidr"`
 	Name string `json:"name"`
 }
+
+// PostgresMetrics represents database metrics
+type PostgresMetrics struct {
+	DatabaseStats    []DatabaseStat  `json:"database_stats"`
+	TableStats       []TableStat     `json:"table_stats"`
+	ActivityStats    ActivityStat    `json:"activity_stats"`
+	TransactionStats TransactionStat `json:"transaction_stats"`
+	ConnectionStats  ConnectionStat  `json:"connection_stats"`
+}
+
+type DatabaseStat struct {
+	DatabaseName  string `json:"database_name"`
+	Size          int64  `json:"size"`
+	SizeFormatted string `json:"size_formatted"`
+	NumBackends   int    `json:"num_backends"`
+}
+
+type TableStat struct {
+	SchemaName    string `json:"schema_name"`
+	TableName     string `json:"table_name"`
+	TotalSize     int64  `json:"total_size"`
+	TableSize     int64  `json:"table_size"`
+	IndexesSize   int64  `json:"indexes_size"`
+	SizeFormatted string `json:"size_formatted"`
+	RowEstimate   int64  `json:"row_estimate"`
+}
+
+type ActivityStat struct {
+	ActiveConnections int     `json:"active_connections"`
+	IdleConnections   int     `json:"idle_connections"`
+	TPS               float64 `json:"transactions_per_second"`
+	Commits           int64   `json:"commits"`
+	Rollbacks         int64   `json:"rollbacks"`
+}
+
+type TransactionStat struct {
+	Commits   int64   `json:"commits"`
+	Rollbacks int64   `json:"rollbacks"`
+	TPS       float64 `json:"tps"`
+}
+
+type ConnectionStat struct {
+	Total          int `json:"total"`
+	Active         int `json:"active"`
+	Idle           int `json:"idle"`
+	MaxConnections int `json:"max_connections"`
+}
+
+// ExporterConfig represents exporter configuration for the config page
+type ExporterConfig struct {
+	ID              uint64                 `json:"id"`
+	IPInet          string                 `json:"ip_inet"`
+	Name            string                 `json:"name"`
+	SnmpVersion     int                    `json:"snmp_version"`
+	SnmpCommunity   string                 `json:"snmp_community"`
+	Snmpv3Username  string                 `json:"snmpv3_username"`
+	Snmpv3Level     string                 `json:"snmpv3_level"`
+	Snmpv3AuthProto string                 `json:"snmpv3_auth_proto"`
+	Snmpv3AuthPass  string                 `json:"snmpv3_auth_pass"`
+	Snmpv3PrivProto string                 `json:"snmpv3_priv_proto"`
+	Snmpv3PrivPass  string                 `json:"snmpv3_priv_pass"`
+	Data            map[string]interface{} `json:"data"`
+}
+
+// InterfaceConfig represents interface configuration for the config page
+type InterfaceConfig struct {
+	ID          uint64 `json:"id"`
+	Exporter    int64  `json:"exporter"`
+	SnmpIndex   int64  `json:"snmp_index"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Alias       string `json:"alias"`
+	Speed       int64  `json:"speed"`
+	Enabled     bool   `json:"enabled"`
+	Bandwidth   int64  `json:"bandwidth"`
+}

@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PostgreSQL Metrics Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 42px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background 0.3s;
+        }
+
+        .back-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .metric-card h3 {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .metric-value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .metric-label {
+            font-size: 14px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .section h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: #f8f9fa;
+        }
+
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e9ecef;
+            color: #333;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .refresh-btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-bottom: 20px;
+            transition: transform 0.3s;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .auto-refresh label {
+            color: white;
+            font-weight: 500;
+        }
+
+        .auto-refresh select {
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            background: white;
+        }
+
+        .progress-bar {
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+        }
+
+        @media (max-width: 768px) {
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 32px;
+            }
+
+            table {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/dashboard.html" class="back-link">← Back to Dashboard</a>
+
+        <div class="header">
+            <h1>🐘 PostgreSQL Metrics</h1>
+            <p>Real-time Database Performance Monitoring</p>
+        </div>
+
+        <div class="auto-refresh">
+            <label for="refresh-interval">Auto-refresh:</label>
+            <select id="refresh-interval">
+                <option value="0">Off</option>
+                <option value="5000">5 seconds</option>
+                <option value="10000" selected>10 seconds</option>
+                <option value="30000">30 seconds</option>
+                <option value="60000">1 minute</option>
+            </select>
+        </div>
+
+        <button class="refresh-btn" onclick="loadMetrics()">🔄 Refresh Now</button>
+
+        <div id="error-container"></div>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <h3>Active Connections</h3>
+                <div class="metric-value" id="active-connections">-</div>
+                <div class="metric-label">Currently active</div>
+            </div>
+
+            <div class="metric-card">
+                <h3>Idle Connections</h3>
+                <div class="metric-value" id="idle-connections">-</div>
+                <div class="metric-label">Currently idle</div>
+            </div>
+
+            <div class="metric-card">
+                <h3>Total Connections</h3>
+                <div class="metric-value" id="total-connections">-</div>
+                <div class="metric-label" id="max-connections-label">of -</div>
+            </div>
+
+            <div class="metric-card">
+                <h3>Transactions/Second</h3>
+                <div class="metric-value" id="tps">-</div>
+                <div class="metric-label">Average rate</div>
+            </div>
+
+            <div class="metric-card">
+                <h3>Total Commits</h3>
+                <div class="metric-value" id="commits">-</div>
+                <div class="metric-label">All time</div>
+            </div>
+
+            <div class="metric-card">
+                <h3>Total Rollbacks</h3>
+                <div class="metric-value" id="rollbacks">-</div>
+                <div class="metric-label">All time</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Database Statistics</h2>
+            <div id="database-stats" class="loading">Loading database statistics...</div>
+        </div>
+
+        <div class="section">
+            <h2>Table Statistics (Top 20 by Size)</h2>
+            <div id="table-stats" class="loading">Loading table statistics...</div>
+        </div>
+    </div>
+
+    <script>
+        let refreshInterval = null;
+
+        function formatNumber(num) {
+            if (num === null || num === undefined) return '-';
+            return num.toLocaleString();
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === null || bytes === undefined) return '-';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let size = bytes;
+            let unitIndex = 0;
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex++;
+            }
+            return size.toFixed(2) + ' ' + units[unitIndex];
+        }
+
+        function showError(message) {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        function clearError() {
+            document.getElementById('error-container').innerHTML = '';
+        }
+
+        async function loadMetrics() {
+            try {
+                clearError();
+                const response = await fetch('/api/v1/postgres/metrics');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                // Update connection stats
+                document.getElementById('active-connections').textContent = formatNumber(data.connection_stats.active);
+                document.getElementById('idle-connections').textContent = formatNumber(data.connection_stats.idle);
+                document.getElementById('total-connections').textContent = formatNumber(data.connection_stats.total);
+                document.getElementById('max-connections-label').textContent = `of ${formatNumber(data.connection_stats.max_connections)}`;
+
+                // Update transaction stats
+                document.getElementById('tps').textContent = data.transaction_stats.tps.toFixed(2);
+                document.getElementById('commits').textContent = formatNumber(data.transaction_stats.commits);
+                document.getElementById('rollbacks').textContent = formatNumber(data.transaction_stats.rollbacks);
+
+                // Update database stats table
+                let dbStatsHtml = '<table><thead><tr><th>Database</th><th>Size</th><th>Connections</th></tr></thead><tbody>';
+                data.database_stats.forEach(db => {
+                    dbStatsHtml += `<tr>
+                        <td><strong>${db.database_name}</strong></td>
+                        <td>${db.size_formatted}</td>
+                        <td>${formatNumber(db.num_backends)}</td>
+                    </tr>`;
+                });
+                dbStatsHtml += '</tbody></table>';
+                document.getElementById('database-stats').innerHTML = dbStatsHtml;
+
+                // Update table stats
+                let tableStatsHtml = '<table><thead><tr><th>Schema</th><th>Table</th><th>Total Size</th><th>Table Size</th><th>Index Size</th><th>Rows (est.)</th></tr></thead><tbody>';
+                data.table_stats.forEach(table => {
+                    tableStatsHtml += `<tr>
+                        <td>${table.schema_name}</td>
+                        <td><strong>${table.table_name}</strong></td>
+                        <td>${table.size_formatted}</td>
+                        <td>${formatBytes(table.table_size)}</td>
+                        <td>${formatBytes(table.indexes_size)}</td>
+                        <td>${formatNumber(table.row_estimate)}</td>
+                    </tr>`;
+                });
+                tableStatsHtml += '</tbody></table>';
+                document.getElementById('table-stats').innerHTML = tableStatsHtml;
+
+            } catch (error) {
+                console.error('Error loading metrics:', error);
+                showError('Error loading metrics: ' + error.message);
+            }
+        }
+
+        // Auto-refresh handler
+        document.getElementById('refresh-interval').addEventListener('change', function() {
+            const interval = parseInt(this.value);
+
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+
+            if (interval > 0) {
+                refreshInterval = setInterval(loadMetrics, interval);
+            }
+        });
+
+        // Initial load
+        loadMetrics();
+
+        // Set up default auto-refresh (10 seconds)
+        refreshInterval = setInterval(loadMetrics, 10000);
+    </script>
+</body>
+</html>

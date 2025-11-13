@@ -760,6 +760,16 @@ func main() {
 	mux.HandleFunc("/api/v1/enrichment", getEnrichmentRequest)
 	mux.HandleFunc("/api/v1/enrichment/bulk", getBulkEnrichmentRequest)
 
+	// PostgreSQL metrics endpoint
+	mux.HandleFunc("/api/v1/postgres/metrics", getPostgresMetricsRequest)
+
+	// Configuration endpoints
+	mux.HandleFunc("/api/v1/config/exporters", getExportersConfigRequest)
+	mux.HandleFunc("/api/v1/config/exporters/update", updateExporterRequest)
+	mux.HandleFunc("/api/v1/config/interfaces", getInterfacesConfigRequest)
+	mux.HandleFunc("/api/v1/config/interfaces/update", updateInterfaceRequest)
+	mux.HandleFunc("/api/v1/config/interfaces/bulk-update", bulkUpdateInterfacesRequest)
+
 	mux.Handle("/", http.StripPrefix("", fileServer))
 	err = http.ListenAndServe(config.Bind_address, mux)
 	if err != nil {

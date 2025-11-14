@@ -529,3 +529,252 @@ func getProtocolAnalysisRequest(w http.ResponseWriter, r *http.Request) {
 
 	w.Write(jsonBytes)
 }
+
+// IPProtocolStats represents aggregated statistics for IP address + protocol
+type IPProtocolStats struct {
+	IPAddress    string  `json:"ip_address"`
+	Protocol     int     `json:"protocol"`
+	ProtocolName string  `json:"protocol_name"`
+	TotalOctets  int64   `json:"total_octets"`
+	TotalPackets int64   `json:"total_packets"`
+	FlowCount    int64   `json:"flow_count"`
+	Percentage   float64 `json:"percentage"`
+}
+
+// IPProtocolPortStats represents statistics for IP + protocol + port with service names
+type IPProtocolPortStats struct {
+	IPAddress    string  `json:"ip_address"`
+	Protocol     int     `json:"protocol"`
+	ProtocolName string  `json:"protocol_name"`
+	Port         int     `json:"port"`
+	ServiceName  string  `json:"service_name"`
+	TotalOctets  int64   `json:"total_octets"`
+	TotalPackets int64   `json:"total_packets"`
+	FlowCount    int64   `json:"flow_count"`
+	Percentage   float64 `json:"percentage"`
+}
+
+// getIPProtocolStatsRequest handles requests for IP+protocol aggregation
+func getIPProtocolStatsRequest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	filter := parseProtocolFilter(r)
+
+	if filter.Exporter == "" || filter.Interface == "" {
+		http.Error(w, `{"error": "exporter and interface are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Query for IP + Protocol aggregation
+	ipProtocolStats, totalOctets, totalPackets, err := getIPProtocolStats(filter)
+	if err != nil {
+		log.Printf("Error getting IP protocol stats: %v", err)
+		http.Error(w, fmt.Sprintf(`{"error": "%v"}`, err), http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate percentages
+	for i := range ipProtocolStats {
+		if totalOctets > 0 {
+			ipProtocolStats[i].Percentage = float64(ipProtocolStats[i].TotalOctets) / float64(totalOctets) * 100
+		}
+	}
+
+	// Query for IP + Protocol + Port with service names
+	ipProtocolPortStats, err := getIPProtocolPortStats(filter)
+	if err != nil {
+		log.Printf("Error getting IP protocol port stats: %v", err)
+		http.Error(w, fmt.Sprintf(`{"error": "%v"}`, err), http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate percentages for port stats
+	for i := range ipProtocolPortStats {
+		if totalOctets > 0 {
+			ipProtocolPortStats[i].Percentage = float64(ipProtocolPortStats[i].TotalOctets) / float64(totalOctets) * 100
+		}
+	}
+
+	response := map[string]interface{}{
+		"ip_protocol_stats":      ipProtocolStats,
+		"ip_protocol_port_stats": ipProtocolPortStats,
+		"total_octets":           totalOctets,
+		"total_packets":          totalPackets,
+	}
+
+	jsonBytes, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("Error marshaling response: %v", err)
+		http.Error(w, `{"error": "failed to encode response"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(jsonBytes)
+}
+
+func getIPProtocolStats(filter TrafficFilter) ([]IPProtocolStats, int64, int64, error) {
+	// Build query to aggregate by IP address and protocol
+	// Use CASE to map known protocols from ports table, aggregate others as "Other"
+	query := `
+		WITH protocol_mapping AS (
+			SELECT DISTINCT protocol, name FROM ports
+		),
+		flow_data AS (
+			SELECT 
+				CASE 
+					WHEN $4 = 'input' THEN dstaddr
+					ELSE srcaddr
+				END as ip_address,
+				prot as protocol,
+				total_octets,
+				total_packets
+			FROM flows_agg_5min
+			WHERE exporter = $1::inet
+			  AND (input = $2::int OR output = $2::int)
+			  AND bucket_5min >= $3::timestamp
+			  AND bucket_5min <= $5::timestamp
+		)
+		SELECT 
+			fd.ip_address,
+			fd.protocol,
+			COALESCE(pm.name, 'Protocol-' || fd.protocol::text) as protocol_name,
+			SUM(fd.total_octets) as total_octets,
+			SUM(fd.total_packets) as total_packets,
+			COUNT(*) as flow_count,
+			SUM(SUM(fd.total_octets)) OVER () as grand_total_octets,
+			SUM(SUM(fd.total_packets)) OVER () as grand_total_packets
+		FROM flow_data fd
+		LEFT JOIN protocol_mapping pm ON fd.protocol = pm.protocol
+		GROUP BY fd.ip_address, fd.protocol, pm.name
+		ORDER BY total_octets DESC
+		LIMIT 100
+	`
+
+	rows, err := config.Db.Query(query,
+		filter.Exporter,
+		filter.Interface,
+		filter.StartTime,
+		filter.Direction,
+		filter.EndTime,
+	)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	defer rows.Close()
+
+	var stats []IPProtocolStats
+	var grandTotalOctets, grandTotalPackets int64
+
+	for rows.Next() {
+		var stat IPProtocolStats
+		var totalOctets, totalPackets sql.NullInt64
+
+		err := rows.Scan(
+			&stat.IPAddress,
+			&stat.Protocol,
+			&stat.ProtocolName,
+			&totalOctets,
+			&totalPackets,
+			&stat.FlowCount,
+			&grandTotalOctets,
+			&grandTotalPackets,
+		)
+		if err != nil {
+			log.Printf("Scan error: %v", err)
+			continue
+		}
+
+		if totalOctets.Valid {
+			stat.TotalOctets = totalOctets.Int64
+		}
+		if totalPackets.Valid {
+			stat.TotalPackets = totalPackets.Int64
+		}
+
+		stats = append(stats, stat)
+	}
+
+	return stats, grandTotalOctets, grandTotalPackets, nil
+}
+
+func getIPProtocolPortStats(filter TrafficFilter) ([]IPProtocolPortStats, error) {
+	// Query to get IP + Protocol + Port with service names from services table
+	query := `
+		WITH flow_data AS (
+			SELECT 
+				CASE 
+					WHEN $4 = 'input' THEN dstaddr
+					ELSE srcaddr
+				END as ip_address,
+				prot as protocol,
+				COALESCE(dstport, srcport, 0) as port,
+				total_octets,
+				total_packets
+			FROM flows_agg_5min
+			WHERE exporter = $1::inet
+			  AND (input = $2::int OR output = $2::int)
+			  AND bucket_5min >= $3::timestamp
+			  AND bucket_5min <= $5::timestamp
+		)
+		SELECT 
+			fd.ip_address,
+			fd.protocol,
+			COALESCE(p.name, 'Protocol-' || fd.protocol::text) as protocol_name,
+			fd.port,
+			COALESCE(p2.name, 'Port-' || fd.port::text) as service_name,
+			SUM(fd.total_octets) as total_octets,
+			SUM(fd.total_packets) as total_packets,
+			COUNT(*) as flow_count
+		FROM flow_data fd
+		LEFT JOIN ports p ON fd.protocol = p.protocol AND p.number IS NULL
+		LEFT JOIN ports p2 ON fd.port = p2.number AND fd.protocol = p2.protocol
+		GROUP BY fd.ip_address, fd.protocol, p.name, fd.port, p2.name
+		ORDER BY total_octets DESC
+		LIMIT 100
+	`
+
+	rows, err := config.Db.Query(query,
+		filter.Exporter,
+		filter.Interface,
+		filter.StartTime,
+		filter.Direction,
+		filter.EndTime,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []IPProtocolPortStats
+
+	for rows.Next() {
+		var stat IPProtocolPortStats
+		var totalOctets, totalPackets sql.NullInt64
+
+		err := rows.Scan(
+			&stat.IPAddress,
+			&stat.Protocol,
+			&stat.ProtocolName,
+			&stat.Port,
+			&stat.ServiceName,
+			&totalOctets,
+			&totalPackets,
+			&stat.FlowCount,
+		)
+		if err != nil {
+			log.Printf("Scan error: %v", err)
+			continue
+		}
+
+		if totalOctets.Valid {
+			stat.TotalOctets = totalOctets.Int64
+		}
+		if totalPackets.Valid {
+			stat.TotalPackets = totalPackets.Int64
+		}
+
+		stats = append(stats, stat)
+	}
+
+	return stats, nil
+}

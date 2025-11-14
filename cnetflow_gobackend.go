@@ -755,6 +755,7 @@ func main() {
 
 	// Protocol analysis endpoint
 	mux.HandleFunc("/api/v1/protocols", getProtocolAnalysisRequest)
+	mux.HandleFunc("/api/v1/protocols/ip-stats", getIPProtocolStatsRequest)
 
 	// IP enrichment endpoints
 	mux.HandleFunc("/api/v1/enrichment", getEnrichmentRequest)

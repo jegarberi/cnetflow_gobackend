@@ -197,6 +197,14 @@
         <div class="chart-container">
             <div id="bytes_out_dst" style="height: 400px;"></div>
         </div>
+
+        <div class="chart-container">
+            <div id="top_talkers" style="height: 500px;"></div>
+        </div>
+
+        <div class="chart-container">
+            <div id="top_talkers_with_port" style="height: 500px;"></div>
+        </div>
     </div>
 </div>
 
@@ -318,6 +326,7 @@
         document.getElementById('bytes_in_dst').innerHTML = '<div class="loading">Loading flow data...</div>';
         document.getElementById('bytes_out_src').innerHTML = '<div class="loading">Loading flow data...</div>';
         document.getElementById('bytes_out_dst').innerHTML = '<div class="loading">Loading flow data...</div>';
+        document.getElementById('top_talkers').innerHTML = '<div class="loading">Loading top talkers...</div>';
 
         try {
             // Load interface metrics (traffic rate chart)
@@ -325,6 +334,11 @@
 
             // Load flow charts (pie charts for top talkers)
             await loadFlowCharts(exporterId, interfaceId, startTime, endTime);
+
+            // Load top talkers charts
+            const exporterIp = exporterSelect.value;
+            await loadTopTalkersChart(exporterIp, interfaceId, startTime, endTime);
+            await loadTopTalkersWithPortChart(exporterIp, interfaceId, startTime, endTime);
 
         } catch (error) {
             console.error('Error loading metrics:', error);
@@ -481,6 +495,233 @@
             console.error('Error loading flow charts:', error);
             showError('Failed to load flow charts: ' + error.message);
         }
+    }
+
+    async function loadTopTalkersChart(exporterIp, interfaceId, startTime, endTime) {
+        try {
+            const startISO = new Date(startTime).toISOString();
+            const endISO = new Date(endTime).toISOString();
+
+            const url = `/api/v1/traffic/top-talkers?exporter=${encodeURIComponent(exporterIp)}&interface=${interfaceId}&start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}&limit=20`;
+            console.log('Fetching top talkers:', url);
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('Top talkers data:', data);
+
+            if (!data.talkers || data.talkers.length === 0) {
+                document.getElementById('top_talkers').innerHTML = '<div class="loading">No top talkers data available</div>';
+                return;
+            }
+
+            // Prepare data for chart
+            const categories = data.talkers.map(t => `${t.srcaddr} → ${t.dstaddr}`);
+            const octetsData = data.talkers.map(t => t.total_octets);
+            const packetsData = data.talkers.map(t => t.total_packets);
+
+            // Create bar chart
+            Highcharts.chart('top_talkers', {
+                chart: {
+                    type: 'bar'
+                },
+                title: {
+                    text: 'Top 20 Talkers (Source → Destination Address)'
+                },
+                subtitle: {
+                    text: 'Ordered by Total Bytes'
+                },
+                xAxis: {
+                    categories: categories,
+                    title: {
+                        text: 'Source → Destination'
+                    },
+                    labels: {
+                        style: {
+                            fontSize: '11px'
+                        }
+                    }
+                },
+                yAxis: [{
+                    title: {
+                        text: 'Total Bytes'
+                    },
+                    labels: {
+                        formatter: function() {
+                            return formatBytes(this.value);
+                        }
+                    }
+                }, {
+                    title: {
+                        text: 'Total Packets'
+                    },
+                    opposite: true,
+                    labels: {
+                        formatter: function() {
+                            return formatNumber(this.value);
+                        }
+                    }
+                }],
+                tooltip: {
+                    shared: true,
+                    formatter: function() {
+                        const talker = data.talkers[this.point.index || this.points[0].point.index];
+                        return '<b>' + talker.srcaddr + ' → ' + talker.dstaddr + '</b><br/>' +
+                               'Protocol: ' + talker.protocol_name + '<br/>' +
+                               'Bytes: ' + formatBytes(talker.total_octets) + '<br/>' +
+                               'Packets: ' + formatNumber(talker.total_packets) + '<br/>' +
+                               'Flows: ' + formatNumber(talker.flow_count) + '<br/>' +
+                               'Percentage: ' + talker.percentage.toFixed(2) + '%';
+                    }
+                },
+                legend: {
+                    enabled: true
+                },
+                plotOptions: {
+                    bar: {
+                        dataLabels: {
+                            enabled: false
+                        }
+                    }
+                },
+                credits: {
+                    enabled: false
+                },
+                series: [{
+                    name: 'Bytes',
+                    data: octetsData,
+                    yAxis: 0,
+                    color: '#667eea'
+                }, {
+                    name: 'Packets',
+                    data: packetsData,
+                    yAxis: 1,
+                    color: '#764ba2'
+                }]
+            });
+
+        } catch (error) {
+            console.error('Error loading top talkers:', error);
+            document.getElementById('top_talkers').innerHTML = '<div class="loading">Error loading top talkers</div>';
+        }
+    }
+
+    async function loadTopTalkersWithPortChart(exporterIp, interfaceId, startTime, endTime) {
+        try {
+            const startISO = new Date(startTime).toISOString();
+            const endISO = new Date(endTime).toISOString();
+
+            const url = `/api/v1/traffic/top-talkers-with-port?exporter=${encodeURIComponent(exporterIp)}&interface=${interfaceId}&start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}&limit=20`;
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            const octetsData = [];
+            const packetsData = [];
+            const categories = [];
+
+            data.talkers.forEach(t => {
+                categories.push(`${t.srcaddr} → ${t.dstaddr}:${t.dstport}`);
+                octetsData.push(t.total_octets);
+                packetsData.push(t.total_packets);
+            });
+
+            Highcharts.chart('top_talkers_with_port', {
+                chart: {
+                    type: 'bar'
+                },
+                title: {
+                    text: 'Top 20 Talkers (Source → Destination:Port)'
+                },
+                xAxis: {
+                    categories: categories,
+                    title: {
+                        text: 'Source → Destination:Port'
+                    },
+                    labels: {
+                        style: {
+                            fontSize: '11px'
+                        }
+                    }
+                },
+                yAxis: [{
+                    title: {
+                        text: 'Total Bytes'
+                    },
+                    labels: {
+                        formatter: function() {
+                            return formatBytes(this.value);
+                        }
+                    }
+                }, {
+                    title: {
+                        text: 'Total Packets'
+                    },
+                    opposite: true,
+                    labels: {
+                        formatter: function() {
+                            return formatNumber(this.value);
+                        }
+                    }
+                }],
+                tooltip: {
+                    shared: true,
+                    formatter: function() {
+                        const talker = data.talkers[this.point.index || this.points[0].point.index];
+                        return '<b>' + talker.srcaddr + ' → ' + talker.dstaddr + ':' + talker.dstport + '</b><br/>' +
+                               'Service: ' + (talker.service_name || '-') + '<br/>' +
+                               'Protocol: ' + talker.protocol_name + '<br/>' +
+                               'Bytes: ' + formatBytes(talker.total_octets) + '<br/>' +
+                               'Packets: ' + formatNumber(talker.total_packets) + '<br/>' +
+                               'Flows: ' + formatNumber(talker.flow_count) + '<br/>' +
+                               'Percentage: ' + talker.percentage.toFixed(2) + '%';
+                    }
+                },
+                legend: {
+                    enabled: true
+                },
+                plotOptions: {
+                    bar: {
+                        dataLabels: {
+                            enabled: false
+                        }
+                    }
+                },
+                credits: {
+                    enabled: false
+                },
+                series: [{
+                    name: 'Bytes',
+                    data: octetsData,
+                    yAxis: 0,
+                    color: '#667eea'
+                }, {
+                    name: 'Packets',
+                    data: packetsData,
+                    yAxis: 1,
+                    color: '#764ba2'
+                }]
+            });
+
+        } catch (error) {
+            console.error('Error loading top talkers with port:', error);
+            document.getElementById('top_talkers_with_port').innerHTML = '<div class="loading">Error loading top talkers with port</div>';
+        }
+    }
+
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function formatNumber(num) {
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     }
 
     // Auto-refresh functionality

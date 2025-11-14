@@ -654,3 +654,322 @@ func getRawFlowsRequest(w http.ResponseWriter, r *http.Request) {
 
 	w.Write(jsonBytes)
 }
+
+// TopTalker represents a source address + destination address combination
+type TopTalker struct {
+	SrcAddr      string  `json:"srcaddr"`
+	DstAddr      string  `json:"dstaddr"`
+	Protocol     int     `json:"protocol"`
+	ProtocolName string  `json:"protocol_name"`
+	TotalOctets  int64   `json:"total_octets"`
+	TotalPackets int64   `json:"total_packets"`
+	FlowCount    int64   `json:"flow_count"`
+	Percentage   float64 `json:"percentage"`
+}
+
+// TopTalkerWithPort represents srcaddr + dstaddr + dstport combination
+type TopTalkerWithPort struct {
+	SrcAddr      string  `json:"srcaddr"`
+	DstAddr      string  `json:"dstaddr"`
+	DstPort      int     `json:"dstport"`
+	ServiceName  string  `json:"service_name"`
+	Protocol     int     `json:"protocol"`
+	ProtocolName string  `json:"protocol_name"`
+	TotalOctets  int64   `json:"total_octets"`
+	TotalPackets int64   `json:"total_packets"`
+	FlowCount    int64   `json:"flow_count"`
+	Percentage   float64 `json:"percentage"`
+}
+
+// getTopTalkersRequest handles requests for top talkers (srcaddr + srcport combinations)
+func getTopTalkersRequest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Parse query parameters
+	exporter := r.URL.Query().Get("exporter")
+	interfaceStr := r.URL.Query().Get("interface")
+	startStr := r.URL.Query().Get("start")
+	endStr := r.URL.Query().Get("end")
+	limit := r.URL.Query().Get("limit")
+
+	if exporter == "" || interfaceStr == "" || startStr == "" || endStr == "" {
+		http.Error(w, `{"error": "exporter, interface, start, and end parameters are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	startTime, err := time.Parse(time.RFC3339, startStr)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "invalid start time: %v"}`, err), http.StatusBadRequest)
+		return
+	}
+
+	endTime, err := time.Parse(time.RFC3339, endStr)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "invalid end time: %v"}`, err), http.StatusBadRequest)
+		return
+	}
+
+	limitNum := 20
+	if limit != "" {
+		if l, err := strconv.Atoi(limit); err == nil && l > 0 {
+			limitNum = l
+		}
+	}
+
+	// Query for top talkers (srcaddr + dstaddr)
+	query := `
+		WITH talker_stats AS (
+			SELECT
+				srcaddr,
+				dstaddr,
+				prot as protocol,
+				SUM(total_octets) as total_octets,
+				SUM(total_packets) as total_packets,
+				COUNT(*) as flow_count
+			FROM flows_agg_5min
+			WHERE exporter = $1::inet
+			  AND (input = $2::int OR output = $2::int)
+			  AND bucket_5min >= $3::timestamp
+			  AND bucket_5min <= $4::timestamp
+			GROUP BY srcaddr, dstaddr, prot
+		),
+		totals AS (
+			SELECT SUM(total_octets) as grand_total_octets
+			FROM talker_stats
+		)
+		SELECT
+			ts.srcaddr,
+			ts.dstaddr,
+			ts.protocol,
+			COALESCE(p.name, 'Protocol-' || ts.protocol::text) as protocol_name,
+			ts.total_octets,
+			ts.total_packets,
+			ts.flow_count,
+			t.grand_total_octets
+		FROM talker_stats ts
+		CROSS JOIN totals t
+		LEFT JOIN ports p ON ts.protocol = p.protocol AND p.number IS NULL
+		ORDER BY ts.total_octets DESC
+		LIMIT $5
+	`
+
+	rows, err := config.Db.Query(query, exporter, interfaceStr, startTime, endTime, limitNum)
+	if err != nil {
+		log.Printf("Error querying top talkers: %v", err)
+		http.Error(w, fmt.Sprintf(`{"error": "database query failed: %v"}`, err), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var talkers []TopTalker
+	var grandTotalOctets int64
+
+	for rows.Next() {
+		var talker TopTalker
+		var totalOctets, totalPackets, flowCount, grandTotal sql.NullInt64
+		var protocol sql.NullInt64
+
+		err := rows.Scan(
+			&talker.SrcAddr,
+			&talker.DstAddr,
+			&protocol,
+			&talker.ProtocolName,
+			&totalOctets,
+			&totalPackets,
+			&flowCount,
+			&grandTotal,
+		)
+		if err != nil {
+			log.Printf("Scan error: %v", err)
+			continue
+		}
+
+		if protocol.Valid {
+			talker.Protocol = int(protocol.Int64)
+		}
+		if totalOctets.Valid {
+			talker.TotalOctets = totalOctets.Int64
+		}
+		if totalPackets.Valid {
+			talker.TotalPackets = totalPackets.Int64
+		}
+		if flowCount.Valid {
+			talker.FlowCount = flowCount.Int64
+		}
+		if grandTotal.Valid {
+			grandTotalOctets = grandTotal.Int64
+			if grandTotalOctets > 0 {
+				talker.Percentage = float64(talker.TotalOctets) / float64(grandTotalOctets) * 100
+			}
+		}
+
+		talkers = append(talkers, talker)
+	}
+
+	response := map[string]interface{}{
+		"talkers":      talkers,
+		"total_octets": grandTotalOctets,
+	}
+
+	jsonBytes, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("Error marshaling response: %v", err)
+		http.Error(w, `{"error": "failed to encode response"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(jsonBytes)
+}
+
+// getTopTalkersWithPortRequest handles requests for top talkers with destination port
+func getTopTalkersWithPortRequest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Parse query parameters
+	exporter := r.URL.Query().Get("exporter")
+	interfaceStr := r.URL.Query().Get("interface")
+	startStr := r.URL.Query().Get("start")
+	endStr := r.URL.Query().Get("end")
+	limit := r.URL.Query().Get("limit")
+
+	if exporter == "" || interfaceStr == "" || startStr == "" || endStr == "" {
+		http.Error(w, `{"error": "exporter, interface, start, and end parameters are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	startTime, err := time.Parse(time.RFC3339, startStr)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "invalid start time: %v"}`, err), http.StatusBadRequest)
+		return
+	}
+
+	endTime, err := time.Parse(time.RFC3339, endStr)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "invalid end time: %v"}`, err), http.StatusBadRequest)
+		return
+	}
+
+	limitNum := 20
+	if limit != "" {
+		if l, err := strconv.Atoi(limit); err == nil && l > 0 {
+			limitNum = l
+		}
+	}
+
+	// Query for top talkers with destination port
+	query := `
+		WITH talker_stats AS (
+			SELECT
+				srcaddr,
+				dstaddr,
+				dstport,
+				prot as protocol,
+				SUM(total_octets) as total_octets,
+				SUM(total_packets) as total_packets,
+				COUNT(*) as flow_count
+			FROM flows_agg_5min
+			WHERE exporter = $1::inet
+			  AND (input = $2::int OR output = $2::int)
+			  AND bucket_5min >= $3::timestamp
+			  AND bucket_5min <= $4::timestamp
+			GROUP BY srcaddr, dstaddr, dstport, prot
+		),
+		totals AS (
+			SELECT SUM(total_octets) as grand_total_octets
+			FROM talker_stats
+		)
+		SELECT
+			ts.srcaddr,
+			ts.dstaddr,
+			ts.dstport,
+			COALESCE(p2.name, ts.dstport::text) as service_name,
+			ts.protocol,
+			COALESCE(p.name, 'Protocol-' || ts.protocol::text) as protocol_name,
+			ts.total_octets,
+			ts.total_packets,
+			ts.flow_count,
+			t.grand_total_octets
+		FROM talker_stats ts
+		CROSS JOIN totals t
+		LEFT JOIN ports p ON ts.protocol = p.protocol AND p.number IS NULL
+		LEFT JOIN ports p2 ON ts.dstport = p2.number AND ts.protocol = p2.protocol
+		ORDER BY ts.total_octets DESC
+		LIMIT $5
+	`
+
+	rows, err := config.Db.Query(query, exporter, interfaceStr, startTime, endTime, limitNum)
+	if err != nil {
+		log.Printf("Error querying top talkers with port: %v", err)
+		http.Error(w, fmt.Sprintf(`{"error": "database query failed: %v"}`, err), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var talkers []TopTalkerWithPort
+	var grandTotalOctets int64
+
+	for rows.Next() {
+		var talker TopTalkerWithPort
+		var totalOctets, totalPackets, flowCount, grandTotal sql.NullInt64
+		var protocol, dstport sql.NullInt64
+		var serviceName sql.NullString
+
+		err := rows.Scan(
+			&talker.SrcAddr,
+			&talker.DstAddr,
+			&dstport,
+			&serviceName,
+			&protocol,
+			&talker.ProtocolName,
+			&totalOctets,
+			&totalPackets,
+			&flowCount,
+			&grandTotal,
+		)
+		if err != nil {
+			log.Printf("Scan error: %v", err)
+			continue
+		}
+
+		if dstport.Valid {
+			talker.DstPort = int(dstport.Int64)
+		}
+		if serviceName.Valid {
+			talker.ServiceName = serviceName.String
+		}
+		if protocol.Valid {
+			talker.Protocol = int(protocol.Int64)
+		}
+		if totalOctets.Valid {
+			talker.TotalOctets = totalOctets.Int64
+		}
+		if totalPackets.Valid {
+			talker.TotalPackets = totalPackets.Int64
+		}
+		if flowCount.Valid {
+			talker.FlowCount = flowCount.Int64
+		}
+		if grandTotal.Valid {
+			grandTotalOctets = grandTotal.Int64
+			if grandTotalOctets > 0 {
+				talker.Percentage = float64(talker.TotalOctets) / float64(grandTotalOctets) * 100
+			}
+		}
+
+		talkers = append(talkers, talker)
+	}
+
+	response := map[string]interface{}{
+		"talkers":      talkers,
+		"total_octets": grandTotalOctets,
+	}
+
+	jsonBytes, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("Error marshaling response: %v", err)
+		http.Error(w, `{"error": "failed to encode response"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(jsonBytes)
+}

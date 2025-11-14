@@ -752,6 +752,8 @@ func main() {
 	mux.HandleFunc("/api/v1/traffic", getTrafficRequest)
 	mux.HandleFunc("/api/v1/traffic/raw", getRawFlowsRequest)
 	mux.HandleFunc("/api/v1/traffic/data-range", getDataRangeRequest)
+	mux.HandleFunc("/api/v1/traffic/top-talkers", getTopTalkersRequest)
+	mux.HandleFunc("/api/v1/traffic/top-talkers-with-port", getTopTalkersWithPortRequest)
 
 	// Protocol analysis endpoint
 	mux.HandleFunc("/api/v1/protocols", getProtocolAnalysisRequest)

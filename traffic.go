@@ -179,7 +179,7 @@ func parseTrafficFilter(r *http.Request) TrafficFilter {
 }
 
 // buildTrafficQuery constructs SQL query based on filters
-func buildTrafficQuery(filter TrafficFilter, groupBy string) (string, []interface{}) {
+func buildTrafficQuery(filter TrafficFilter, groupBy string, addressType string) (string, []interface{}) {
 	var conditions []string
 	var args []interface{}
 	argIndex := 1
@@ -188,7 +188,7 @@ func buildTrafficQuery(filter TrafficFilter, groupBy string) (string, []interfac
 	selectFields := ""
 	if groupBy == "address" {
 		addrField := "srcaddr"
-		if filter.Direction == "output" {
+		if addressType == "dstaddr" {
 			addrField = "dstaddr"
 		}
 		selectFields = fmt.Sprintf(`
@@ -292,11 +292,13 @@ func buildTrafficQuery(filter TrafficFilter, groupBy string) (string, []interfac
 	// GROUP BY clause
 	groupByClause := ""
 	if groupBy == "address" {
-		if filter.Direction == "output" {
+
+		if addressType == "dstaddr" {
 			groupByClause = " GROUP BY dstaddr"
 		} else {
 			groupByClause = " GROUP BY srcaddr"
 		}
+
 	} else if groupBy == "port" {
 		groupByClause = " GROUP BY srcaddr, srcport, dstport, prot"
 	}
@@ -339,8 +341,8 @@ func buildTrafficQuery(filter TrafficFilter, groupBy string) (string, []interfac
 }
 
 // getTrafficDataAggregated retrieves aggregated traffic data based on filters
-func getTrafficDataAggregated(filter TrafficFilter, groupBy string) (*TrafficResponse, error) {
-	query, args := buildTrafficQuery(filter, groupBy)
+func getTrafficDataAggregated(filter TrafficFilter, groupBy string, addressType string) (*TrafficResponse, error) {
+	query, args := buildTrafficQuery(filter, groupBy, addressType)
 
 	log.Println("Query:", query)
 	log.Println("Args:", args)
@@ -448,9 +450,14 @@ func getTrafficRequest(w http.ResponseWriter, r *http.Request) {
 		groupBy = "address"
 	}
 
+	addressType := r.URL.Query().Get("address_type")
+	if addressType == "" {
+		addressType = "srcaddr"
+	}
+
 	// Log the filter for debugging
-	log.Printf("Traffic filter - Exporter: %s, Interface: %s, Direction: %s, Start: %s, End: %s",
-		filter.Exporter, filter.Interface, filter.Direction, filter.StartTime, filter.EndTime)
+	log.Printf("Traffic filter - Exporter: %s, Interface: %s, Direction: %s, AddressType: %s, Start: %s, End: %s",
+		filter.Exporter, filter.Interface, filter.Direction, addressType, filter.StartTime, filter.EndTime)
 
 	// Validate required fields
 	if filter.Exporter == "" {
@@ -462,7 +469,7 @@ func getTrafficRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := getTrafficDataAggregated(filter, groupBy)
+	response, err := getTrafficDataAggregated(filter, groupBy, addressType)
 	if err != nil {
 		log.Printf("Error getting traffic data: %v", err)
 		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)

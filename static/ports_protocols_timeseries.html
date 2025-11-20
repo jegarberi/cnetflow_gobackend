@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ports & Protocols Time Series</title>
+  <link rel="icon" href="data:,">
+  <script src="js/htmx.min.js"></script>
+  <script src="js/jquery-3.7.1.min.js"></script>
+  <script src="js/highcharts.js"></script>
+  <script src="js/exporting.js"></script>
+  <script src="js/export-data.js"></script>
+  <script src="js/accessibility.js"></script>
+    <script src="js/cache.js"></script>
+  <style>
+    :root { --col-w: 280px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: #f7f7f9; }
+    header { padding: 12px 16px; background: #1f2937; color: #fff; display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 18px; margin: 0; }
+    .container { display: grid; grid-template-columns: var(--col-w) 1fr; gap: 0; min-height: calc(100vh - 52px); }
+    aside.col { border-right: 1px solid #e5e7eb; background: #fff; }
+    aside.col h3 { margin: 0; padding: 12px 14px; font-size: 13px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb; }
+    .panel { padding: 10px 12px; }
+    .main { padding: 12px; overflow: auto; }
+    .filters { display: grid; grid-template-columns: repeat(6, minmax(160px, 1fr)); gap: 10px 12px; align-items: end; margin-bottom: 12px; }
+    label { font-size: 12px; color: #374151; display: block; margin-bottom: 4px; }
+    input[type="datetime-local"], select { width: 100%; padding: 6px 8px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; }
+    button { padding: 7px 12px; font-size: 12px; font-weight: 600; color: #fff; background: #2563eb; border: 0; border-radius: 4px; cursor: pointer; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    .htmx-indicator { display: none; margin-left: 8px; }
+    .htmx-request .htmx-indicator { display: inline-block; }
+    .chart { min-height: 520px; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px; }
+    .help { font-size: 12px; color: #6b7280; }
+    @media (max-width: 1200px) { .filters { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Ports & Protocols Time Series</h1>
+  <span class="htmx-indicator">Loading…</span>
+</header>
+<div class="container">
+  <aside class="col">
+    <h3>Filters</h3>
+    <div class="panel">
+      <div class="field">
+        <label for="exporter">Exporter</label>
+        <div id="exporter_wrap"
+             hx-get="/api/v1/flows/exporters/combo"
+             hx-trigger="load"
+             hx-target="#exporter_wrap"
+             hx-swap="innerHTML"
+             hx-indicator=".htmx-indicator"></div>
+      </div>
+      <div class="field">
+        <label for="interface">Interface</label>
+        <div id="interfaces_div">Pick an exporter…</div>
+      </div>
+      <div class="field">
+        <label for="direction">Direction</label>
+        <select id="direction">
+          <option value="input">input</option>
+          <option value="output">output</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="portRole">Port Role</label>
+        <select id="portRole">
+          <option value="dst">Destination Port</option>
+          <option value="src">Source Port</option>
+        </select>
+      </div>
+      <p class="help">Data source: aggregated flow bytes per bucket; rates computed as 8*bytes/period.</p>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="filters">
+      <div>
+        <label for="start-dt">Start</label>
+        <input id="start-dt" type="datetime-local" step="300">
+      </div>
+      <div>
+        <label for="end-dt">End</label>
+        <input id="end-dt" type="datetime-local" step="300">
+      </div>
+      <div>
+        <label for="topN">Top N series</label>
+        <select id="topN">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="15">15</option>
+          <option value="20">20</option>
+        </select>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="apply" disabled>Apply</button>
+        <span class="htmx-indicator">Updating…</span>
+      </div>
+    </div>
+
+    <div id="chart" class="chart"></div>
+  </main>
+</div>
+
+<script>
+
+// Wire exporters combo → interfaces combo via htmx
+// The exporters combo is rendered by backend with id="exporters" (see server code)
+document.body.addEventListener('change', function(e){
+  const sel = e.target;
+  if (sel && (sel.id === 'exporters' || sel.id === 'exporter')) {
+    const exporter = sel.value;
+    if (!exporter) { document.getElementById('interfaces_div').innerHTML = 'Pick an exporter…'; return; }
+    // Load interfaces combo for flows using combo format
+    htmx.ajax('GET', `/api/v1/flows/interfaces?exporter=${encodeURIComponent(exporter)}&format=combo`, { target: '#interfaces_div', swap: 'innerHTML' });
+  }
+  if (sel && sel.id === 'interface') {
+    // Enable apply when interface chosen
+    document.getElementById('apply').disabled = !sel.value;
+  }
+});
+
+function toEpochSeconds(dtStr){
+  if (!dtStr) return null;
+  const d = new Date(dtStr);
+  if (isNaN(d)) return null;
+  return Math.floor(d.getTime()/1000);
+}
+
+function inferPeriodSeconds(timestamps){
+  if (!timestamps || timestamps.length < 2) return 3600; // default hourly
+  // compute the most common delta
+  const deltas = [];
+  for (let i=1;i<timestamps.length;i++){
+    const dt = Math.max(1, Math.round((timestamps[i] - timestamps[i-1])/1000));
+    deltas.push(dt);
+  }
+  deltas.sort((a,b)=>a-b);
+  // median
+  return deltas[Math.floor(deltas.length/2)] || 3600;
+}
+
+
+function renderChart(){
+  if (!window.Highcharts) return;
+  if (window.portsChart) { window.portsChart.destroy(); }
+  window.portsChart = Highcharts.chart('chart', {
+    chart: { zooming: { type: 'x' }, animation: false },
+    title: { text: 'Ports & Protocols Rate (bits/s)', align: 'left' },
+    subtitle: { text: 'Grouped by protocol:port', align: 'left' },
+    xAxis: { type: 'datetime' },
+    yAxis: { title: { text: 'bits/s' } },
+    legend: { layout: 'horizontal', align: 'right', verticalAlign: 'top' },
+    tooltip: { shared: true, valueSuffix: ' bps', valueDecimals: 0 },
+    exporting: { enabled: true },
+    series: [],
+    responsive: { rules: [{ condition: { maxWidth: 700 }, chartOptions: { legend: { layout: 'horizontal', align: 'center', verticalAlign: 'bottom' } } }] }
+  });
+}
+
+function applyFilters(){
+  const exporterSel = document.getElementById('exporters') || document.getElementById('exporter');
+  const ifaceSel = document.getElementById('interface');
+  const direction = document.getElementById('direction').value || 'input';
+  const portRole = document.getElementById('portRole').value || 'dst';
+  const topN = parseInt(document.getElementById('topN').value||'10',10);
+  let start = toEpochSeconds(document.getElementById('start-dt').value);
+  let end = toEpochSeconds(document.getElementById('end-dt').value);
+  const exporter = exporterSel && exporterSel.value; // inet or ID, backend accepts both
+  const iface = ifaceSel && ifaceSel.value;
+  if (!exporter || !iface) return;
+  if (!start || !end){
+    const now = Math.floor(Date.now()/1000);
+    end = end || now;
+    start = start || (now - 24*3600);
+  }
+
+  const url = `/api/v1/flows/ports-timeseries/${encodeURIComponent(exporter)}/${encodeURIComponent(iface)}/${start}/${end}/${encodeURIComponent(direction)}/${encodeURIComponent(portRole)}/json`;
+  renderChart();
+
+  // Web Worker code to group by protocol+port and compute rates
+  const workerCode = `
+    function inferPeriodSeconds(timestamps){
+      if (!timestamps || timestamps.length < 2) return 3600;
+      const deltas = [];
+      for (let i=1;i<timestamps.length;i++){
+        const dt = Math.max(1, Math.round((timestamps[i] - timestamps[i-1])/1000));
+        deltas.push(dt);
+      }
+      deltas.sort((a,b)=>a-b);
+      return deltas[Math.floor(deltas.length/2)] || 3600;
+    }
+    self.onmessage = function(ev){
+      const { rows, portRole, topN } = ev.data || {};
+      if (!rows || !rows.length){ self.postMessage({ series: [] }); return; }
+      // Collect timestamps
+      const tsSet = new Set();
+      for (const r of rows){ tsSet.add(Date.parse(r.bucket)); }
+      const timestamps = Array.from(tsSet).sort((a,b)=>a-b);
+      const period = inferPeriodSeconds(timestamps);
+      // Group bytes by key per timestamp
+      const byKey = new Map(); // key -> Map(ts -> bytes)
+      const totals = new Map(); // key -> total bytes
+      const protName = (p)=>({1:'ICMP',6:'TCP',17:'UDP'}[p]||String(p||'unk'));
+      for (const r of rows){
+        const t = Date.parse(r.bucket);
+        const p = (r.prot==null? 'unk' : r.prot);
+        const port = (portRole==='src'? r.srcport : r.dstport);
+        const portStr = (port==null? '0' : String(port));
+        const key = protName(p)+':'+portStr;
+        let m = byKey.get(key); if (!m){ m = new Map(); byKey.set(key, m); }
+        m.set(t, (m.get(t)||0) + (r.total_bytes||0));
+        totals.set(key, (totals.get(key)||0) + (r.total_bytes||0));
+      }
+      // Pick topN by totals
+      const keys = Array.from(byKey.keys()).sort((a,b)=> (totals.get(b)||0)-(totals.get(a)||0)).slice(0, topN);
+      // Build dense series arrays [ts, bps]
+      const series = [];
+      for (const key of keys){
+        const m = byKey.get(key);
+        const data = [];
+        for (const t of timestamps){
+          const bytes = m.get(t)||0;
+          const bps = Math.floor(8*bytes/period);
+          data.push([t, bps]);
+        }
+        series.push({ name: key, data });
+      }
+      self.postMessage({ series, timestamps });
+    };
+  `;
+  const blob = new Blob([workerCode], { type: 'application/javascript' });
+  const worker = new Worker(URL.createObjectURL(blob));
+
+  $.getJSON(url, function(rows){
+    worker.onmessage = function(ev){
+      const { series } = ev.data || {};
+      // Add one by one to avoid blocking
+      if (!window.portsChart) return;
+      // Remove existing
+      while (portsChart.series.length) { portsChart.series[0].remove(false); }
+      let i=0;
+      function addNext(){
+        if (i>=series.length){ portsChart.redraw(); return; }
+        const s = series[i++];
+        setTimeout(function(){ portsChart.addSeries({ type: 'line', name: s.name, data: s.data, turboThreshold: 0 }, false); addNext(); }, 0);
+      }
+      addNext();
+      worker.terminate();
+    };
+    worker.postMessage({ rows, portRole, topN });
+  });
+}
+
+// Apply button
+document.getElementById('apply').addEventListener('click', applyFilters);
+
+// Default Highcharts options
+if (window.Highcharts) {
+  Highcharts.setOptions({ time: { useUTC: false }, lang: { numericSymbols: null, thousandsSep: ',' } });
+}
+</script>
+</body>
+</html>

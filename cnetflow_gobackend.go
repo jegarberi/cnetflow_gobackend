@@ -12,8 +12,8 @@ import (
 	"net/netip"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
-
 	"time"
 
 	_ "github.com/lib/pq" // The underscore is intentional - it's a blank import
@@ -77,6 +77,7 @@ func getFlowsDB(exporter string, last string) ([]FlowGEO, string) {
 	last = strings.Split(last, "+")[0]
 	query := fmt.Sprintf("select * from flows where exporter = $1::inet and last  >= $2::timestamp ;  ")
 	log.Println(query)
+	exporter = strings.Split(exporter, "/")[0]
 	rows, err = config.Db.Query(query, exporter, last)
 	if err != nil {
 		log.Println(err.Error())
@@ -235,12 +236,28 @@ func getInterfacesMetricsRequest(w http.ResponseWriter, r *http.Request) {
 	var end time.Time
 	startStr := r.PathValue("start")
 	endStr := r.PathValue("end")
-	if startStr != "" {
-		start, _ = time.Parse(time.RFC3339, startStr)
+	// Also allow query params as fallback
+	if startStr == "" {
+		startStr = r.URL.Query().Get("start")
 	}
-	if endStr != "" {
-		end, _ = time.Parse(time.RFC3339, endStr)
+	if endStr == "" {
+		endStr = r.URL.Query().Get("end")
 	}
+	// Parse start/end as RFC3339 or epoch seconds
+	parseTime := func(s string) time.Time {
+		if s == "" {
+			return time.Time{}
+		}
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			return t
+		}
+		if sec, err := strconv.ParseInt(s, 10, 64); err == nil {
+			return time.Unix(sec, 0)
+		}
+		return time.Time{}
+	}
+	start = parseTime(startStr)
+	end = parseTime(endStr)
 	if start.IsZero() {
 		start = time.Now().Add(-24 * time.Hour)
 	}
@@ -256,6 +273,12 @@ func getInterfacesMetricsRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	metrics_json, err := json.Marshal(metrics)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, string(metrics_json))
 
 }
@@ -627,7 +650,8 @@ func getExportersRequest(w http.ResponseWriter, r *http.Request) {
 	if format == "list" || format == "" {
 		var line = ""
 		for _, exporter := range exporters {
-			line = fmt.Sprintf("%s<li id=\"%d\" hx-post=\"./api/v1/interfaces/%d\" hx-target=\"#interfaces_div\">%s [%s]</li>\n", line, exporter.ID, exporter.ID, exporter.Name, exporter.IP_Inet)
+			// Post to flows interfaces endpoint with exporter as inet string (expected by handler)
+			line = fmt.Sprintf("%s<li id=\"%d\" hx-post=\"/api/v1/flows/interfaces/%s\" hx-target=\"#interfaces_div\">%s [%s]</li>\n", line, exporter.ID, exporter.IP_Inet, exporter.Name, exporter.IP_Inet)
 		}
 		fmt.Fprintf(w, line)
 	} else if format == "json" {
@@ -673,10 +697,11 @@ func getExportersRequest(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(bytes)
 	} else if format == "combo" {
-		var line = "<select name=\"exporter\" hx-get=\"/api/v1/interfaces\" hx-target=\"#interfaces_div\" hx-indicator=\".htmx-indicator\" id=\"exporters\">"
-		line = fmt.Sprintf("%s\n<option value=\"%d\">%s</option>", line, 0, "select exporter")
+		// Use flows interfaces endpoint; exporter value should be inet string for handler
+		var line = "<select name=\"exporter\" hx-get=\"/api/v1/flows/interfaces\" hx-target=\"#interfaces_div\" hx-indicator=\".htmx-indicator\" id=\"exporters\">"
+		line = fmt.Sprintf("%s\n<option value=\"%s\">%s</option>", line, "", "select exporter")
 		for _, exporter := range exporters {
-			line = fmt.Sprintf("%s\n<option value=\"%d\">[%d] %s %s</option>", line, exporter.ID, exporter.ID, exporter.Name, exporter.IP_Inet)
+			line = fmt.Sprintf("%s\n<option value=\"%s\">[%d] %s %s</option>", line, exporter.IP_Inet, exporter.ID, exporter.Name, exporter.IP_Inet)
 		}
 
 		line = fmt.Sprintf("%s\n</select>\n", line)
@@ -849,6 +874,139 @@ func getFlowsRequest(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Wrote %d bytes...\n", n)
 	}
 }
+
+// getPortsProtocolsTimeseriesJSON serves aggregated flow bytes per bucket grouped by protocol and port.
+// Path: /api/v1/flows/ports-timeseries/{exporter}/{interface}/{start}/{end}/{direction}/{portrole}/json
+// exporter: exporter ID as used elsewhere (resolved to inet)
+// interface: SNMP index value to match against input/output column based on direction
+// start/end: epoch seconds; if empty, defaults applied
+// direction: "input" or "output"
+// portrole: "src" or "dst" (only used on the client side for grouping; server returns both ports)
+func getPortsProtocolsTimeseriesJSON(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	// Parse params
+	direction := r.PathValue("direction")
+	if direction != "input" && direction != "output" {
+		direction = "input"
+	}
+	exporterStr := r.PathValue("exporter")
+	ifaceStr := r.PathValue("interface")
+	startStr := r.PathValue("start")
+	endStr := r.PathValue("end")
+	// Resolve exporter to inet string. Accept either inet (contains '.' or ':') or numeric ID.
+	exporterInet := ""
+	if strings.Contains(exporterStr, ".") || strings.Contains(exporterStr, ":") {
+		exporterInet = exporterStr
+	} else {
+		exporters, err := getExporterList()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for _, exp := range exporters {
+			if fmt.Sprintf("%d", exp.ID) == exporterStr {
+				exporterInet = exp.IP_Inet
+				break
+			}
+		}
+	}
+	if exporterInet == "" {
+		http.Error(w, "exporter not found", http.StatusBadRequest)
+		return
+	}
+	// Time range
+	var start, end time.Time
+	if startStr != "" {
+		if se, err := strconv.ParseInt(startStr, 10, 64); err == nil {
+			start = time.Unix(se, 0)
+		}
+	}
+	if endStr != "" {
+		if ee, err := strconv.ParseInt(endStr, 10, 64); err == nil {
+			end = time.Unix(ee, 0)
+		}
+	}
+	if start.IsZero() {
+		start = time.Now().Add(-24 * time.Hour)
+	}
+	if end.IsZero() {
+		end = time.Now()
+	}
+	// Build and execute query
+	col := "input"
+	if direction == "output" {
+		col = "output"
+	}
+	q := fmt.Sprintf(`
+		select bucket, prot, srcport, dstport, sum(total_bytes) as total_bytes
+		from flows_hourly
+		where exporter = $1 and %s = $2 and bucket AT TIME ZONE 'UTC' >= $3 and bucket AT TIME ZONE 'UTC' <= $4
+		group by bucket, prot, srcport, dstport
+		order by bucket asc
+	`, col)
+	rows, err := config.Db.Query(q, exporterInet, ifaceStr, start, end)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	// Prepare scanning vars
+	var (
+		bucket     sql.NullTime
+		prot       sql.NullInt64
+		srcport    sql.NullInt64
+		dstport    sql.NullInt64
+		totalBytes sql.NullInt64
+	)
+	type Row struct {
+		Bucket     string `json:"bucket"`
+		Prot       *int64 `json:"prot"`
+		SrcPort    *int64 `json:"srcport"`
+		DstPort    *int64 `json:"dstport"`
+		TotalBytes int64  `json:"total_bytes"`
+	}
+	var out []Row
+	for rows.Next() {
+		if err := rows.Scan(&bucket, &prot, &srcport, &dstport, &totalBytes); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		var pPtr, spPtr, dpPtr *int64
+		if prot.Valid {
+			v := prot.Int64
+			pPtr = &v
+		}
+		if srcport.Valid {
+			v := srcport.Int64
+			spPtr = &v
+		}
+		if dstport.Valid {
+			v := dstport.Int64
+			dpPtr = &v
+		}
+		bkt := time.Now().UTC().Format(time.RFC3339)
+		if bucket.Valid {
+			bkt = bucket.Time.UTC().Format(time.RFC3339)
+		}
+		out = append(out, Row{
+			Bucket:     bkt,
+			Prot:       pPtr,
+			SrcPort:    spPtr,
+			DstPort:    dpPtr,
+			TotalBytes: totalBytes.Int64,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(out); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
 func main() {
 	var err error
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -913,8 +1071,13 @@ func main() {
 
 	// New helpers: extract exporters and interfaces directly from flows_hourly
 	mux.HandleFunc("/api/v1/flows/exporters/{format}", getFlowExportersRequest)
+	// Support both path and query-string styles for flows interfaces endpoint
+	mux.HandleFunc("/api/v1/flows/interfaces", getFlowInterfacesRequest)
 	mux.HandleFunc("/api/v1/flows/interfaces/{exporter}/{format}", getFlowInterfacesRequest)
 	mux.HandleFunc("/api/v1/flows/interfaces/{exporter}", getFlowInterfacesRequest)
+
+	// New ports+protocols timeseries endpoint (JSON)
+	mux.HandleFunc("/api/v1/flows/ports-timeseries/{exporter}/{interface}/{start}/{end}/{direction}/{portrole}/json", getPortsProtocolsTimeseriesJSON)
 
 	mux.HandleFunc("/api/v1/flows/{exporter}", getFlowsRequest)
 	mux.HandleFunc("/api/v1/flows/{exporter}/{last}", getFlowsRequest)

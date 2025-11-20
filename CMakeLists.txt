@@ -2,10 +2,24 @@ cmake_minimum_required(VERSION 3.10)
 project(cnetflow_gobackend)
 
 # Allow external override of project/package version (e.g., from git tag)
+# Resolve PACKAGE_VERSION with the following priority:
+# 1) Explicit CMake cache var VERSION (passed via -DVERSION=...)
+# 2) PROJECT_VERSION if provided and non-empty
+# 3) Fallback default "0.0.0"
 if(NOT DEFINED PROJECT_VERSION)
-    set(PROJECT_VERSION "0.0.0")
+    set(PROJECT_VERSION "")
+endif()
+
+set(PACKAGE_VERSION "")
+if(DEFINED VERSION AND NOT "${VERSION}" STREQUAL "")
+    set(PACKAGE_VERSION "${VERSION}")
+elseif(DEFINED PROJECT_VERSION AND NOT "${PROJECT_VERSION}" STREQUAL "")
+    set(PACKAGE_VERSION "${PROJECT_VERSION}")
+else()
+    set(PACKAGE_VERSION "0.0.0")
 endif()
 message(STATUS "Project version: ${PROJECT_VERSION}")
+message(STATUS "Package version: ${PACKAGE_VERSION}")
 
 # Set Go binary path
 find_program(GO_EXECUTABLE go)
@@ -81,7 +95,7 @@ endif()
 set(CPACK_GENERATOR "RPM")
 set(CPACK_PACKAGE_NAME "cnetflow-gobackend")
 # Use externally provided version for packages
-set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_VERSION "${PACKAGE_VERSION}")
 set(CPACK_PACKAGE_RELEASE 1)
 set(CPACK_PACKAGE_CONTACT "admin@example.com")
 set(CPACK_PACKAGE_VENDOR "CNetFlow")

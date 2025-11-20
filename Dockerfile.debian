@@ -29,9 +29,12 @@ WORKDIR /build
 # Copy project files
 COPY . .
 
+# Accept version from build args (set by CI or scripts)
+ARG VERSION=0.0.0
+
 # Build the application using cmake
 RUN mkdir -p build && cd build && \
-    cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DPROJECT_VERSION=${VERSION} .. && \
     make && \
     cpack -G DEB
 

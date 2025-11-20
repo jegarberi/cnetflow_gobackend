@@ -40,13 +40,31 @@ jobs:
           sudo rm -rf /usr/share/dotnet || true
           df -h
 
+      - name: Compute VERSION from git ref
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            # Strip leading 'refs/tags/' and optional 'v' prefix
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG_NAME#v}"
+          else
+            SHORT_SHA="${GITHUB_SHA::7}"
+            VERSION="0.0.0-g${SHORT_SHA}"
+          fi
+          echo "VERSION=$VERSION" | tee -a $GITHUB_ENV
+          echo "Computed VERSION=$VERSION"
+
       - name: Build Debian package
         if: matrix.target == 'debian'
+        env:
+          VERSION: ${{ env.VERSION }}
         run: |
           bash ./docker_build_debian.sh
 
       - name: Build RHEL7 package
         if: matrix.target == 'rhel7'
+        env:
+          VERSION: ${{ env.VERSION }}
         run: |
           bash ./docker_build_rhel7.sh
 

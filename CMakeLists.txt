@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.10)
 project(cnetflow_gobackend)
 
+# Allow external override of project/package version (e.g., from git tag)
+if(NOT DEFINED PROJECT_VERSION)
+    set(PROJECT_VERSION "0.0.0")
+endif()
+message(STATUS "Project version: ${PROJECT_VERSION}")
+
 # Set Go binary path
 find_program(GO_EXECUTABLE go)
 if(NOT GO_EXECUTABLE)
@@ -74,7 +80,8 @@ endif()
 # CPack configuration for RPM packaging (CentOS 7)
 set(CPACK_GENERATOR "RPM")
 set(CPACK_PACKAGE_NAME "cnetflow-gobackend")
-set(CPACK_PACKAGE_VERSION "1.0.0")
+# Use externally provided version for packages
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_RELEASE 1)
 set(CPACK_PACKAGE_CONTACT "admin@example.com")
 set(CPACK_PACKAGE_VENDOR "CNetFlow")

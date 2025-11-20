@@ -628,7 +628,35 @@ func getExportersRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprintf(w, line)
 	} else if format == "json" {
-		bytes, err := json.Marshal(exporters)
+		// Return an array of objects with ip_inet and name from the exporters table
+		rows, qerr := config.Db.Query("SELECT ip_inet, name FROM exporters ORDER BY ip_inet")
+		if qerr != nil {
+			http.Error(w, qerr.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+		type exporterItem struct {
+			IPInet string `json:"ip_inet"`
+			Name   string `json:"name"`
+		}
+		list := make([]exporterItem, 0)
+		for rows.Next() {
+			var ip sql.NullString
+			var name sql.NullString
+			if err := rows.Scan(&ip, &name); err != nil {
+				log.Println("scan exporters json:", err)
+				continue
+			}
+			item := exporterItem{IPInet: "", Name: ""}
+			if ip.Valid {
+				item.IPInet = ip.String
+			}
+			if name.Valid {
+				item.Name = name.String
+			}
+			list = append(list, item)
+		}
+		bytes, err := json.Marshal(list)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(err.Error()))
@@ -658,6 +686,137 @@ func getExportersRequest(w http.ResponseWriter, r *http.Request) {
 	} else {
 		log.Printf("Wrote %d bytes...\n", n)
 	}*/
+}
+
+// getFlowExportersRequest returns distinct exporters found in flows_hourly
+func getFlowExportersRequest(w http.ResponseWriter, r *http.Request) {
+	format := r.PathValue("format")
+	if format == "" {
+		format = r.FormValue("format")
+	}
+
+	rows, err := config.Db.Query("SELECT DISTINCT exporter::text FROM flows_hourly ORDER BY exporter::text")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	exporters := []string{}
+	for rows.Next() {
+		var exp sql.NullString
+		if err := rows.Scan(&exp); err != nil {
+			log.Println(err)
+			continue
+		}
+		if exp.Valid {
+			exporters = append(exporters, exp.String)
+		}
+	}
+
+	if format == "json" {
+		bytes, err := json.Marshal(exporters)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(bytes)
+		return
+	}
+
+	if format == "combo" {
+		line := "<select name=\"exporter\" id=\"exporter\" hx-get=\"/api/v1/flows/interfaces\" hx-target=\"#interfaces_div\" hx-indicator=\".htmx-indicator\">"
+		line = fmt.Sprintf("%s\n<option value=\"\">%s</option>", line, "select exporter")
+		for _, exp := range exporters {
+			line = fmt.Sprintf("%s\n<option value=\"%s\">%s</option>", line, exp, exp)
+		}
+		line = fmt.Sprintf("%s\n</select>\n", line)
+		fmt.Fprintf(w, line)
+		return
+	}
+
+	// default list for htmx
+	line := ""
+	for _, exp := range exporters {
+		line = fmt.Sprintf("%s<li hx-post=\"/api/v1/flows/interfaces/%s\" hx-target=\"#interfaces_div\">%s</li>\n", line, exp, exp)
+	}
+	fmt.Fprintf(w, line)
+}
+
+// getFlowInterfacesRequest returns distinct interface indices (input/output) for a given exporter from flows_hourly
+func getFlowInterfacesRequest(w http.ResponseWriter, r *http.Request) {
+	exporter := r.PathValue("exporter")
+	if exporter == "" {
+		r.ParseForm()
+		exporter = r.FormValue("exporter")
+	}
+	format := r.PathValue("format")
+	if format == "" {
+		format = r.FormValue("format")
+	}
+	if exporter == "" {
+		http.Error(w, "exporter is required", http.StatusBadRequest)
+		return
+	}
+
+	query := `
+		SELECT DISTINCT input as ifindex
+		FROM flows_hourly
+		WHERE exporter = $1::inet AND input IS NOT NULL
+		UNION
+		SELECT DISTINCT output as ifindex
+		FROM flows_hourly
+		WHERE exporter = $1::inet AND output IS NOT NULL
+		ORDER BY ifindex`
+
+	rows, err := config.Db.Query(query, exporter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	indices := []int64{}
+	for rows.Next() {
+		var idx sql.NullInt64
+		if err := rows.Scan(&idx); err != nil {
+			log.Println(err)
+			continue
+		}
+		if idx.Valid {
+			indices = append(indices, idx.Int64)
+		}
+	}
+
+	if format == "json" {
+		bytes, err := json.Marshal(indices)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(bytes)
+		return
+	}
+
+	if format == "combo" {
+		line := "<select name=\"interface\" id=\"interface\">"
+		line = fmt.Sprintf("%s\n<option value=\"\">%s</option>", line, "select interface")
+		for _, idx := range indices {
+			line = fmt.Sprintf("%s\n<option value=\"%d\">[%d]</option>", line, idx, idx)
+		}
+		line = fmt.Sprintf("%s\n</select>\n", line)
+		fmt.Fprintf(w, line)
+		return
+	}
+
+	// default htmx list
+	line := ""
+	for _, idx := range indices {
+		line = fmt.Sprintf("%s<li hx-post=\"/api/v1/body/%s/%d\" hx-target=\"#body\">[%d]</li>\n", line, exporter, idx, idx)
+	}
+	fmt.Fprintf(w, line)
 }
 func getFlowsRequest(w http.ResponseWriter, r *http.Request) {
 	rs := ReturnStruct{}
@@ -743,6 +902,11 @@ func main() {
 	mux.HandleFunc("/api/v1/service-networks/{format}", getServiceNetworksRequest)
 	mux.HandleFunc("/api/v1/interfaces/{exporter}/{format}", getInterfacesRequest)
 	mux.HandleFunc("/api/v1/exporters/{format}", getExportersRequest)
+
+	// New helpers: extract exporters and interfaces directly from flows_hourly
+	mux.HandleFunc("/api/v1/flows/exporters/{format}", getFlowExportersRequest)
+	mux.HandleFunc("/api/v1/flows/interfaces/{exporter}/{format}", getFlowInterfacesRequest)
+	mux.HandleFunc("/api/v1/flows/interfaces/{exporter}", getFlowInterfacesRequest)
 
 	mux.HandleFunc("/api/v1/flows/{exporter}", getFlowsRequest)
 	mux.HandleFunc("/api/v1/flows/{exporter}/{last}", getFlowsRequest)

@@ -745,10 +745,8 @@
             const result = await cache.fetchWithCache('/api/v1/exporters/json', {}, CacheTTL.LONG);
             const exporters = result.data;
             allExporters = exporters;
-
             const select = document.getElementById('exporterSelect');
             select.innerHTML = '<option value="">-- Select Exporter --</option>';
-
             for (const id in exporters) {
                 const exp = exporters[id];
                 const option = document.createElement('option');

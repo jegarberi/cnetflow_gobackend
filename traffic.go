@@ -184,7 +184,7 @@ func buildTrafficQuery(filter TrafficFilter, groupBy string, addressType string)
 	var args []interface{}
 	argIndex := 1
 
-	// Base query - use flows_agg_5min for aggregated data
+	// Base query - use flows_hourly for aggregated data
 	selectFields := ""
 	if groupBy == "address" {
 		addrField := "srcaddr"
@@ -193,7 +193,7 @@ func buildTrafficQuery(filter TrafficFilter, groupBy string, addressType string)
 		}
 		selectFields = fmt.Sprintf(`
 			%s as address,
-			SUM(total_octets) as total_octets,
+			SUM(total_bytes) as total_octets,
 			SUM(total_packets) as total_packets,
 			COUNT(*) as flow_count
 		`, addrField)
@@ -204,7 +204,7 @@ func buildTrafficQuery(filter TrafficFilter, groupBy string, addressType string)
 			srcport,
 			dstport,
 			prot as protocol,
-			SUM(total_octets) as total_octets,
+			SUM(total_bytes) as total_octets,
 			SUM(total_packets) as total_packets,
 			COUNT(*) as flow_count
 		`, addrField)
@@ -212,7 +212,7 @@ func buildTrafficQuery(filter TrafficFilter, groupBy string, addressType string)
 
 	baseQuery := fmt.Sprintf(`
 		SELECT %s
-		FROM flows_agg_5min
+		FROM flows_hourly
 		WHERE 1=1
 	`, selectFields)
 
@@ -230,13 +230,13 @@ func buildTrafficQuery(filter TrafficFilter, groupBy string, addressType string)
 	}
 
 	if !filter.StartTime.IsZero() {
-		conditions = append(conditions, fmt.Sprintf("bucket_5min AT TIME ZONE 'UTC' >= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("bucket AT TIME ZONE 'UTC' >= $%d", argIndex))
 		args = append(args, filter.StartTime)
 		argIndex++
 	}
 
 	if !filter.EndTime.IsZero() {
-		conditions = append(conditions, fmt.Sprintf("bucket_5min AT TIME ZONE 'UTC' <= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("bucket AT TIME ZONE 'UTC' <= $%d", argIndex))
 		args = append(args, filter.EndTime)
 		argIndex++
 	}
@@ -497,7 +497,7 @@ func getDataRangeRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var minTime, maxTime time.Time
-	query := "SELECT MIN(bucket_5min), MAX(bucket_5min) FROM flows_agg_5min WHERE exporter = $1::inet"
+	query := "SELECT MIN(bucket), MAX(bucket) FROM flows_hourly WHERE exporter = $1::inet"
 	err := config.Db.QueryRow(query, exporter).Scan(&minTime, &maxTime)
 	if err != nil {
 		log.Printf("Error querying data range: %v", err)
@@ -730,14 +730,14 @@ func getTopTalkersRequest(w http.ResponseWriter, r *http.Request) {
 				srcaddr,
 				dstaddr,
 				prot as protocol,
-				SUM(total_octets) as total_octets,
+				SUM(total_bytes) as total_octets,
 				SUM(total_packets) as total_packets,
 				COUNT(*) as flow_count
-			FROM flows_agg_5min
+			FROM flows_hourly
 			WHERE exporter = $1::inet
 			  AND (input = $2::int OR output = $2::int)
-			  AND bucket_5min >= $3::timestamp
-			  AND bucket_5min <= $4::timestamp
+			  AND bucket AT TIME ZONE 'UTC' >= $3::timestamp
+			  AND bucket AT TIME ZONE 'UTC' <= $4::timestamp
 			GROUP BY srcaddr, dstaddr, prot
 		),
 		totals AS (
@@ -871,14 +871,14 @@ func getTopTalkersWithPortRequest(w http.ResponseWriter, r *http.Request) {
 				dstaddr,
 				dstport,
 				prot as protocol,
-				SUM(total_octets) as total_octets,
+				SUM(total_bytes) as total_octets,
 				SUM(total_packets) as total_packets,
 				COUNT(*) as flow_count
-			FROM flows_agg_5min
+			FROM flows_hourly
 			WHERE exporter = $1::inet
 			  AND (input = $2::int OR output = $2::int)
-			  AND bucket_5min >= $3::timestamp
-			  AND bucket_5min <= $4::timestamp
+			  AND bucket AT TIME ZONE 'UTC' >= $3::timestamp
+			  AND bucket AT TIME ZONE 'UTC' <= $4::timestamp
 			GROUP BY srcaddr, dstaddr, dstport, prot
 		),
 		totals AS (

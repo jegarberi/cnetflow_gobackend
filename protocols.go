@@ -132,13 +132,13 @@ func getProtocolStats(filter TrafficFilter) ([]ProtocolStats, error) {
 	}
 
 	if !filter.StartTime.IsZero() {
-		conditions = append(conditions, fmt.Sprintf("bucket_5min AT TIME ZONE 'UTC' >= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("bucket AT TIME ZONE 'UTC' >= $%d", argIndex))
 		args = append(args, filter.StartTime)
 		argIndex++
 	}
 
 	if !filter.EndTime.IsZero() {
-		conditions = append(conditions, fmt.Sprintf("bucket_5min AT TIME ZONE 'UTC' <= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("bucket AT TIME ZONE 'UTC' <= $%d", argIndex))
 		args = append(args, filter.EndTime)
 		argIndex++
 	}
@@ -157,10 +157,10 @@ func getProtocolStats(filter TrafficFilter) ([]ProtocolStats, error) {
 	query := fmt.Sprintf(`
 		SELECT
 			prot as protocol,
-			SUM(total_octets) as total_octets,
+			SUM(total_bytes) as total_octets,
 			SUM(total_packets) as total_packets,
 			COUNT(*) as flow_count
-		FROM flows_agg_5min
+		FROM flows_hourly
 		%s
 		GROUP BY prot
 		ORDER BY total_octets DESC
@@ -236,13 +236,13 @@ func getProtocolPortStats(filter TrafficFilter, limit int) ([]ProtocolPortStats,
 	}
 
 	if !filter.StartTime.IsZero() {
-		conditions = append(conditions, fmt.Sprintf("bucket_5min AT TIME ZONE 'UTC' >= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("bucket AT TIME ZONE 'UTC' >= $%d", argIndex))
 		args = append(args, filter.StartTime)
 		argIndex++
 	}
 
 	if !filter.EndTime.IsZero() {
-		conditions = append(conditions, fmt.Sprintf("bucket_5min AT TIME ZONE 'UTC' <= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("bucket AT TIME ZONE 'UTC' <= $%d", argIndex))
 		args = append(args, filter.EndTime)
 		argIndex++
 	}
@@ -263,10 +263,10 @@ func getProtocolPortStats(filter TrafficFilter, limit int) ([]ProtocolPortStats,
 			prot as protocol,
 			srcport,
 			dstport,
-			SUM(total_octets) as total_octets,
+			SUM(total_bytes) as total_octets,
 			SUM(total_packets) as total_packets,
 			COUNT(*) as flow_count
-		FROM flows_agg_5min
+		FROM flows_hourly
 		%s
 		GROUP BY prot, srcport, dstport
 		ORDER BY total_octets DESC
@@ -370,13 +370,13 @@ func getProtocolTimeSeries(filter TrafficFilter) ([]ProtocolTimeSeriesPoint, err
 	}
 
 	if !filter.StartTime.IsZero() {
-		conditions = append(conditions, fmt.Sprintf("bucket_5min AT TIME ZONE 'UTC' >= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("bucket AT TIME ZONE 'UTC' >= $%d", argIndex))
 		args = append(args, filter.StartTime)
 		argIndex++
 	}
 
 	if !filter.EndTime.IsZero() {
-		conditions = append(conditions, fmt.Sprintf("bucket_5min AT TIME ZONE 'UTC' <= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("bucket AT TIME ZONE 'UTC' <= $%d", argIndex))
 		args = append(args, filter.EndTime)
 		argIndex++
 	}
@@ -388,13 +388,13 @@ func getProtocolTimeSeries(filter TrafficFilter) ([]ProtocolTimeSeriesPoint, err
 
 	query := fmt.Sprintf(`
 		SELECT
-			bucket_5min,
+			bucket,
 			prot,
-			SUM(total_octets) as total_octets
-		FROM flows_agg_5min
+			SUM(total_bytes) as total_octets
+		FROM flows_hourly
 		%s
-		GROUP BY bucket_5min, prot
-		ORDER BY bucket_5min ASC, prot ASC
+		GROUP BY bucket, prot
+		ORDER BY bucket ASC, prot ASC
 	`, whereClause)
 
 	log.Println("Protocol time series query:", query)
@@ -626,13 +626,13 @@ func getIPProtocolStats(filter TrafficFilter) ([]IPProtocolStats, int64, int64, 
 					ELSE srcaddr
 				END as ip_address,
 				prot as protocol,
-				total_octets,
+				total_bytes as total_octets,
 				total_packets
-			FROM flows_agg_5min
+			FROM flows_hourly
 			WHERE exporter = $1::inet
 			  AND (input = $2::int OR output = $2::int)
-			  AND bucket_5min >= $3::timestamp
-			  AND bucket_5min <= $5::timestamp
+			  AND bucket AT TIME ZONE 'UTC' >= $3::timestamp
+			  AND bucket AT TIME ZONE 'UTC' <= $5::timestamp
 		)
 		SELECT 
 			fd.ip_address,

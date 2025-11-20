@@ -91,6 +91,7 @@ func getFlowsDB(exporter string, last string) ([]FlowGEO, string) {
 	for rows.Next() {
 		//var row Row
 		var flow FlowDB
+		var flow_hash sql.NullString
 		err := rows.Scan(
 			&flow.ID,
 			&flow.InsertedAt,
@@ -113,8 +114,11 @@ func getFlowsDB(exporter string, last string) ([]FlowGEO, string) {
 			&flow.IPVersion,
 			&flow.First,
 			&flow.Last,
+			&flow_hash,
 		)
-
+		if flow_hash.Valid {
+			flow.FlowHash = flow_hash.String
+		}
 		flowGeo := FlowGEO{}
 		if flow.Last.Unix() > max_last.Unix() {
 			max_last = flow.Last

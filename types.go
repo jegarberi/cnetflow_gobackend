@@ -77,6 +77,7 @@ type FlowDB struct {
 	IPVersion  string    `json:"ip_version" db:"ip_version"`
 	First      time.Time `json:"first" db:"first"`
 	Last       time.Time `json:"last" db:"last"`
+	FlowHash   string    `json:"flow_hash" db:"flow_hash"`
 }
 
 type Exporter struct {

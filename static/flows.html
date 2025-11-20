@@ -406,7 +406,7 @@
         </div>
     </div>
 
-    <div id="interfaceMetricsChart" style="height: 420px; margin-bottom: 20px;"></div>
+    <div id="chart_snmptraffic" style="height: 420px; margin-bottom: 20px;"></div>
 
     <div id="errorContainer"></div>
 
@@ -436,7 +436,6 @@
 <script>
     let autoRefreshInterval = null;
     let currentConfig = null;
-    let postgrestUrl = '';
     let allExporters = {};
     let allInterfaces = {};
     let allServices = [];
@@ -497,20 +496,6 @@
         }, 8000);
     }
 
-    // Load PostgREST URL from config
-    async function loadConfig() {
-        try {
-            // Try to get from a config endpoint or use environment variable
-            // For now, we'll construct it from the backend
-            postgrestUrl = window.location.origin.replace(':3002', ':3000') + '/';
-            postgrestUrl = 'http://192.168.100.78:3003/';
-            console.log('PostgREST URL:', postgrestUrl);
-
-        } catch (error) {
-            console.error('Error loading config:', error);
-            postgrestUrl = 'http://192.168.100.78:3003/'; // Fallback
-        }
-    }
 
     // Load exporters
     async function loadExporters() {
@@ -648,7 +633,7 @@
         }
     }
 
-    // Load and render Highcharts time series for interface metrics
+    // Load and render Highcharts time series for interface metrics (backend JS endpoint)
     async function loadInterfaceMetricsChart() {
         const exporterSelect = document.getElementById('exporterSelect');
         const exporterId = exporterSelect.options[exporterSelect.selectedIndex]?.dataset?.id || '';
@@ -661,75 +646,39 @@
         }
 
         try {
-            const query = `${postgrestUrl}interface_metrics?exporter=eq.${exporterId}&snmp_index=eq.${interfaceId}&inserted_at=gt.${startTime}&inserted_at=lt.${endTime}&order=inserted_at.asc`;
-            const data = await $.getJSON(query);
+            // Convert datetime-local to Unix epoch seconds (UTC)
+            const startUnix = Math.floor(new Date(startTime).getTime() / 1000);
+            const endUnix = Math.floor(new Date(endTime).getTime() / 1000);
 
-            // Build bits/s from octet deltas
-            const seriesIn = [];
-            const seriesOut = [];
-
-            for (let i = 1; i < data.length; i++) {
-                const prev = data[i - 1];
-                const curr = data[i];
-                const last = Math.floor(Date.parse(prev.inserted_at) / 1000);
-                const now = Math.floor(Date.parse(curr.inserted_at) / 1000);
-                const interval = Math.max(1, now - last);
-
-                let rateIn = Math.floor(8 * (curr.octets_in - prev.octets_in) / interval);
-                let rateOut = Math.floor(8 * (curr.octets_out - prev.octets_out) / interval);
-
-                if (rateIn < 0) rateIn = 0;
-                if (rateOut < 0) rateOut = 0;
-
-                const t = Date.parse(curr.inserted_at);
-                seriesIn.push([t, rateIn]);
-                seriesOut.push([t, rateOut]);
+            // Clear previous chart container content to ensure fresh init by backend JS
+            const container = document.getElementById('chart_snmptraffic');
+            if (container) {
+                container.innerHTML = '';
             }
 
-            // Initialize or update chart
-            if (!interfaceChart) {
-                interfaceChart = Highcharts.chart('interfaceMetricsChart', {
-                    title: { text: 'Interface Traffic Rate', align: 'left' },
-                    subtitle: { text: 'bits per second (in/out)', align: 'left' },
-                    chart: { zooming: { type: 'x' } },
-                    xAxis: { type: 'datetime' },
-                    yAxis: { title: { text: 'bits/s' } },
-                    legend: { layout: 'horizontal', align: 'left', verticalAlign: 'top' },
-                    tooltip: { shared: true, valueSuffix: ' bps' },
-                    series: [
-                        { type: 'line', name: 'bits/s in', data: seriesIn },
-                        { type: 'line', name: 'bits/s out', data: seriesOut }
-                    ],
-                    responsive: { rules: [{ condition: { maxWidth: 600 }, chartOptions: { legend: { layout: 'horizontal', align: 'center', verticalAlign: 'bottom' } } }] }
-                });
-            } else {
-                // Update data efficiently
-                if (interfaceChart.series.length < 2) {
-                    interfaceChart.series[0]?.remove(false);
-                    interfaceChart.addSeries({ type: 'line', name: 'bits/s in', data: seriesIn }, false);
-                    interfaceChart.addSeries({ type: 'line', name: 'bits/s out', data: seriesOut }, false);
-                    interfaceChart.redraw();
-                } else {
-                    interfaceChart.series[0].setData(seriesIn, false);
-                    interfaceChart.series[1].setData(seriesOut, false);
-                    interfaceChart.redraw();
-                }
-            }
+            // Inject backend-generated Highcharts JS
+            const script = document.createElement('script');
+            script.src = `/api/v1/metrics/${encodeURIComponent(exporterId)}/${encodeURIComponent(interfaceId)}/${startUnix}/${endUnix}/js?_=${Date.now()}`;
+            script.async = true;
+
+            // Clean up old script tags for this chart if any
+            const old = document.querySelectorAll('script[data-role="ifmetrics"]');
+            old.forEach(s => s.remove());
+            script.setAttribute('data-role', 'ifmetrics');
+
+            document.body.appendChild(script);
         } catch (err) {
             console.error('Error loading interface metrics:', err);
-            // Non-fatal; show error unobtrusively
-            // showError('Failed to load interface metrics: ' + err.message);
         }
     }
 
-    // Load flows using PostgREST endpoint
+    // Load flows using backend aggregated traffic endpoint
     async function loadFlows() {
-
         const exporterIp = document.getElementById('exporterSelect').value;
         const interfaceId = document.getElementById('interfaceSelect').value;
         const direction = document.getElementById('directionSelect').value;
-        const srcDst = document.getElementById('srcDstSelect').value;
-        const metric = document.getElementById('metricSelect').value;
+        const srcDst = document.getElementById('srcDstSelect').value; // 'src' or 'dst'
+        const metric = document.getElementById('metricSelect').value; // 'total_octets' | 'total_packets'
         const startTime = document.getElementById('startDateTime').value;
         const endTime = document.getElementById('endDateTime').value;
         const limit = document.getElementById('limitInput').value;
@@ -741,18 +690,9 @@
         const dstPort = document.getElementById('dstPortFilter').value.trim();
 
         // Validation
-        if (!exporterIp) {
-            showError('Please select an exporter');
-            return;
-        }
-        if (!interfaceId) {
-            showError('Please select an interface');
-            return;
-        }
-        if (!startTime || !endTime) {
-            showError('Please select start and end times');
-            return;
-        }
+        if (!exporterIp) { showError('Please select an exporter'); return; }
+        if (!interfaceId) { showError('Please select an interface'); return; }
+        if (!startTime || !endTime) { showError('Please select start and end times'); return; }
 
         currentConfig = { exporterIp, interfaceId, direction, srcDst, metric, startTime, endTime, limit, search, srcAddr, dstAddr, protocol, srcPort, dstPort };
 
@@ -764,111 +704,97 @@
         tbody.innerHTML = `<tr><td colspan="${colspanCount}" class="loading">Loading flows...</td></tr>`;
 
         try {
-            // Build PostgREST query - include srcport, dstport, protocol when extra columns are shown
-            const addrField = `${srcDst}addr`;
-            let selectFields = `${addrField},${metric}.sum()`;
+            // Build backend query parameters
+            const params = new URLSearchParams({
+                exporter: exporterIp,
+                interface: interfaceId,
+                direction: direction,
+                start: new Date(startTime).toISOString(),
+                end: new Date(endTime).toISOString(),
+                limit: String(limit),
+                order_by: metric,
+                order_dir: 'desc'
+            });
 
             if (showExtraColumns) {
+                params.append('group_by', 'port');
+            } else {
+                params.append('group_by', 'address');
+                params.append('address_type', srcDst === 'dst' ? 'dstaddr' : 'srcaddr');
+            }
 
-                selectFields = `${addrField},srcport,dstport,prot,${metric}.sum()`;
-            }
-            
-            let query = `${postgrestUrl}flows_agg_5min?select=${selectFields}&exporter=eq.${exporterIp}&${direction}=eq.${interfaceId}&bucket_5min=gt.${startTime}&bucket_5min=lt.${endTime}`;
+            if (srcAddr) params.append('srcaddr', srcAddr);
+            if (dstAddr) params.append('dstaddr', dstAddr);
+            if (protocol) params.append('protocol', protocol);
+            if (srcPort) params.append('srcport', srcPort);
+            if (dstPort) params.append('dstport', dstPort);
 
-            // Add additional filters
-            if (srcAddr) {
-                query += `&srcaddr=eq.${srcAddr}`;
-            }
-            if (dstAddr) {
-                query += `&dstaddr=eq.${dstAddr}`;
-            }
-            if (protocol) {
-                query += `&prot=eq.${protocol}`;
-            }
-            if (srcPort) {
-                query += `&srcport=eq.${srcPort}`;
-            }
-            if (dstPort) {
-                query += `&dstport=eq.${dstPort}`;
-            }
-            if (searchInput.value !== "") {
-                query += `&${addrField}=eq.${searchInput.value}`;
-            }
-            query += `&limit=${limit}`;
+            const result = await cache.fetchWithCache(`/api/v1/traffic?${params.toString()}`, { params: Object.fromEntries(params) }, CacheTTL.MEDIUM);
+            const data = result.data || {};
+            const records = Array.isArray(data.records) ? data.records : [];
 
-            console.log('Query:', query);
-
-            const data = await $.getJSON(query);
-
-            if (!data || data.length === 0) {
+            if (records.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" class="loading">No flows found for the selected criteria</td></tr>';
                 updateStats(0, 0, 0);
                 return;
             }
 
-            // Filter by search if provided
-            let flows = data;
+            // Optional client-side search on address
+            let rows = records;
             if (search) {
-                flows = flows.filter(flow => flow[addrField] && flow[addrField].includes(search));
+                rows = rows.filter(r => (r.address || '').includes(search));
             }
 
-            // Calculate total volume
-            const totalVolume = flows.reduce((sum, f) => sum + (f.sum || 0), 0);
-            const uniqueAddrs = new Set(flows.map(f => f[addrField])).size;
+            // Choose total metric for stats/volume display
+            const totalVolumeAll = metric === 'total_octets' ? (data.total_octets || 0) : (data.total_packets || 0);
+            const totalVolumeFiltered = rows.reduce((sum, r) => sum + (metric === 'total_octets' ? (r.total_octets || 0) : (r.total_packets || 0)), 0);
 
-            // Sort by volume descending
-            flows.sort((a, b) => (b.sum || 0) - (a.sum || 0));
+            // Sort by selected metric desc
+            rows.sort((a, b) => (metric === 'total_octets' ? (b.total_octets - a.total_octets) : (b.total_packets - a.total_packets)));
 
             // Update stats
-            updateStats(flows.length, uniqueAddrs, totalVolume);
+            const uniqueAddrs = new Set(rows.map(r => r.address)).size;
+            updateStats(rows.length, uniqueAddrs, totalVolumeFiltered || totalVolumeAll);
 
             // Render table
-            tbody.innerHTML = flows.map((flow, index) => {
-                const volume = flow.sum || 0;
-                const percentage = totalVolume > 0 ? ((volume / totalVolume) * 100).toFixed(2) : 0;
-                const displayVolume = metric === 'total_octets' ? formatBytes(volume) : formatNumber(volume);
-
-                // Resolve address and optional name from services table
-                const addrVal = flow[addrField] || 'N/A';
-                const nameFromIp = addrVal !== 'N/A' ? resolveNameForIp(addrVal) : undefined;
+            tbody.innerHTML = rows.map((r, index) => {
+                const vol = metric === 'total_octets' ? (r.total_octets || 0) : (r.total_packets || 0);
+                const percentage = (metric === 'total_octets')
+                    ? (data.total_octets ? (vol / data.total_octets * 100) : 0)
+                    : (data.total_packets ? (vol / data.total_packets * 100) : 0);
 
                 let extraColumns = '';
                 if (showExtraColumns) {
-                    const srcPortValue = flow.srcport !== undefined ? flow.srcport : 'N/A';
-                    const dstPortValue = flow.dstport !== undefined ? flow.dstport : 'N/A';
-                    const protocolValue = flow.prot !== undefined ? getProtocolName(flow.prot) : 'N/A';
-                    const srcPortName = flow.srcport !== undefined ? servicesMap[flow.prot+":"+flow.srcport] : 'N/A';
-                    const dstPortName = flow.dstport !== undefined ? servicesMap[flow.prot+":"+flow.dstport] : 'N/A';
+                    const protoBadge = r.protocol_name ? r.protocol_name : (r.protocol || 'N/A');
                     extraColumns = `
-                        <td class="extra-column">${srcPortValue} [${srcPortName === undefined ? "" : srcPortName}]</td>
-                        <td class="extra-column">${dstPortValue} [${dstPortName === undefined ? "" : srcPortName}]</td>
-
-                        <td class="extra-column">${protocolValue}</td>
-                    `;
+                        <td class="extra-column">${r.srcport ?? 'N/A'}</td>
+                        <td class="extra-column">${r.dstport ?? 'N/A'}</td>
+                        <td class="extra-column">${protoBadge}</td>`;
                 }
+
+                // Optional name resolution via service networks
+                const nameFromIp = r.address ? resolveNameForIp(r.address) : undefined;
 
                 return `
                     <tr>
                         <td>${index + 1}</td>
-                        <td><strong>${addrVal}</strong>${nameFromIp ? ` (${nameFromIp})` : ''}</td>
+                        <td><strong>${r.address || 'N/A'}</strong>${nameFromIp ? ` (${nameFromIp})` : ''}</td>
                         ${extraColumns}
-                        <td>${displayVolume}</td>
+                        <td>${metric === 'total_octets' ? formatBytes(vol) : formatNumber(vol)}</td>
                         <td>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <div style="flex: 1; background: #e9ecef; border-radius: 4px; height: 20px; overflow: hidden;">
-                                    <div style="background: linear-gradient(90deg, #007bff, #0056b3); height: 100%; width: ${percentage}%;"></div>
+                                    <div style="background: linear-gradient(90deg, #007bff, #0056b3); height: 100%; width: ${percentage.toFixed(2)}%;"></div>
                                 </div>
-                                <span style="min-width: 50px; text-align: right; font-weight: 600;">${percentage}%</span>
+                                <span style="min-width: 50px; text-align: right; font-weight: 600;">${percentage.toFixed(2)}%</span>
                             </div>
                         </td>
-                    </tr>
-                `;
+                    </tr>`;
             }).join('');
-
         } catch (error) {
             console.error('Error loading flows:', error);
-            showError('Error loading flows: ' + error.message);
             tbody.innerHTML = `<tr><td colspan="${colspanCount}" class="loading">Error loading flows. Check console for details.</td></tr>`;
+            showError('Error loading flows: ' + error.message);
         }
     }
 
@@ -1106,7 +1032,6 @@
 
     // Initialize on page load
     initializeTimes();
-    loadConfig();
     loadExporters();
     loadServices();
     loadServiceNetworks();

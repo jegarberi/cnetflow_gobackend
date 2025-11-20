@@ -53,16 +53,23 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/static
     PATTERN ".*" EXCLUDE
 )
 
-# Install GeoIP database
-install(FILES ${CMAKE_SOURCE_DIR}/GeoLite2-City.mmdb
-    DESTINATION share/${BINARY_NAME}
-)
+# Install GeoIP database (optional)
+if(EXISTS ${CMAKE_SOURCE_DIR}/GeoLite2-City.mmdb)
+    install(FILES ${CMAKE_SOURCE_DIR}/GeoLite2-City.mmdb
+        DESTINATION share/${BINARY_NAME}
+    )
+else()
+    message(WARNING "GeoLite2-City.mmdb not found in source tree; package will be built without the GeoIP database.")
+endif()
 
-# Install SQL init files
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/init.sql
-    DESTINATION share/${BINARY_NAME}
-    PATTERN ".*" EXCLUDE
-)
+# Install SQL init file if present (optional)
+if(EXISTS ${CMAKE_SOURCE_DIR}/init.sql)
+    install(FILES ${CMAKE_SOURCE_DIR}/init.sql
+        DESTINATION share/${BINARY_NAME}
+    )
+else()
+    message(STATUS "init.sql not found; skipping installation of database init script.")
+endif()
 
 # CPack configuration for RPM packaging (CentOS 7)
 set(CPACK_GENERATOR "RPM")

@@ -591,6 +591,15 @@
                 </div>
 
                 <div class="filter-group">
+                    <label for="addressModeSelect">Address Mode</label>
+                    <select id="addressModeSelect">
+                        <option value="both" selected>Both (src → dst)</option>
+                        <option value="src">Source only</option>
+                        <option value="dst">Destination only</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
                     <label for="countryFilter">Filter by Country</label>
                     <input type="text" id="countryFilter" placeholder="e.g., United States, US, Brazil">
                 </div>
@@ -751,7 +760,7 @@
                 const exp = exporters[id];
                 const option = document.createElement('option');
                 option.value = exp.ip_inet;
-                option.dataset.id = id;
+                option.dataset.id = exp.id;
                 option.textContent = `${exp.name} [${exp.ip_inet}]`;
                 select.appendChild(option);
             }
@@ -823,6 +832,7 @@
         const maxOctets = document.getElementById('maxOctetsFilter').value.trim();
         const limit = document.getElementById('limitInput').value;
         const groupBy = document.getElementById('groupBySelect').value;
+        const addressMode = document.getElementById('addressModeSelect').value;
 
         if (!exporter) {
             showError('Please select an exporter');
@@ -848,9 +858,22 @@
                 direction: direction,
                 start: new Date(startTime).toISOString(),
                 end: new Date(endTime).toISOString(),
-                limit: limit,
-                group_by: groupBy
+                limit: limit
             });
+
+            // Determine aggregation based on selections
+            if (groupBy === 'port') {
+                // Port-level grouping takes precedence
+                params.append('group_by', 'port');
+            } else {
+                // Address-mode grouping
+                if (addressMode === 'both') {
+                    params.append('group_by', 'pair');
+                } else {
+                    params.append('group_by', 'address');
+                    params.append('address_type', addressMode === 'dst' ? 'dstaddr' : 'srcaddr');
+                }
+            }
 
             if (srcAddr) params.append('srcaddr', srcAddr);
             if (dstAddr) params.append('dstaddr', dstAddr);
@@ -945,7 +968,7 @@
                     parts.push(record.enrichment.city);
                 }
                 if (parts.length > 0) {
-                    enrichmentInfo = `<br><small style="color: #666;">${parts.join(' | ')}</small>`;
+                    enrichmentInfo = `<br><small style=\"color: #666;\">${parts.join(' | ')}</small>`;
                 }
             }
 
@@ -955,10 +978,21 @@
                 <td>${getProtocolBadge(record.protocol_name || record.protocol)}</td>
             ` : '';
 
+            // Address cell: if Address Mode is Both and backend provided srcaddr/dstaddr, show both
+            const addressMode = document.getElementById('addressModeSelect').value;
+            let addressCellHtml = '';
+            if (addressMode === 'both' && (record.srcaddr || record.dstaddr)) {
+                const src = record.srcaddr || '';
+                const dst = record.dstaddr || '';
+                addressCellHtml = `<div><strong>${src}</strong> &rarr; <strong>${dst}</strong>${enrichmentInfo}</div>`;
+            } else {
+                addressCellHtml = `<strong>${record.address}</strong>${enrichmentInfo}`;
+            }
+
             return `
                 <tr>
                     <td>${index + 1}</td>
-                    <td><strong>${record.address}</strong>${enrichmentInfo}</td>
+                    <td>${addressCellHtml}</td>
                     ${portsColumns}
                     <td>${formatBytes(record.total_octets)}</td>
                     <td>${formatNumber(record.total_packets)}</td>

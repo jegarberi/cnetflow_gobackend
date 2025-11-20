@@ -262,7 +262,7 @@
                 const exp = exporters[id];
                 const option = document.createElement('option');
                 option.value = exp.ip_inet;
-                option.dataset.id = id;
+                option.dataset.id = exp.id;
                 option.textContent = `${exp.name} [${exp.ip_inet}]`;
                 select.appendChild(option);
             }

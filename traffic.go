@@ -62,7 +62,12 @@ type TrafficRecord struct {
 
 // TrafficAggregated represents aggregated traffic data
 type TrafficAggregated struct {
-	Address      string        `json:"address"`
+	// For single-address aggregations
+	Address string `json:"address,omitempty"`
+	// For pair aggregations
+	SrcAddr string `json:"srcaddr,omitempty"`
+	DstAddr string `json:"dstaddr,omitempty"`
+	// Optional port/protocol when grouping by port
 	SrcPort      int64         `json:"srcport,omitempty"`
 	DstPort      int64         `json:"dstport,omitempty"`
 	Protocol     string        `json:"protocol,omitempty"`
@@ -208,6 +213,13 @@ func buildTrafficQuery(filter TrafficFilter, groupBy string, addressType string)
 			SUM(total_packets) as total_packets,
 			COUNT(*) as flow_count
 		`, addrField)
+	} else if groupBy == "pair" {
+		selectFields = `
+			srcaddr,
+			dstaddr,
+			SUM(total_bytes) as total_octets,
+			SUM(total_packets) as total_packets,
+			COUNT(*) as flow_count`
 	}
 
 	baseQuery := fmt.Sprintf(`
@@ -301,6 +313,8 @@ func buildTrafficQuery(filter TrafficFilter, groupBy string, addressType string)
 
 	} else if groupBy == "port" {
 		groupByClause = " GROUP BY srcaddr, srcport, dstport, prot"
+	} else if groupBy == "pair" {
+		groupByClause = " GROUP BY srcaddr, dstaddr"
 	}
 
 	// Having clause for volume filters
@@ -389,6 +403,20 @@ func getTrafficDataAggregated(filter TrafficFilter, groupBy string, addressType 
 			if protocol.Valid {
 				record.Protocol = protocol.String
 			}
+		} else if groupBy == "pair" {
+			err := rows.Scan(
+				&record.SrcAddr,
+				&record.DstAddr,
+				&record.TotalOctets,
+				&record.TotalPackets,
+				&record.FlowCount,
+			)
+			if err != nil {
+				log.Printf("Scan error: %v", err)
+				continue
+			}
+			// convenience combined address for UI/sorting
+			record.Address = fmt.Sprintf("%s → %s", record.SrcAddr, record.DstAddr)
 		}
 
 		totalOctets += record.TotalOctets
@@ -412,20 +440,42 @@ func getTrafficDataAggregated(filter TrafficFilter, groupBy string, addressType 
 			}
 		}
 
-		// Collect unique IPs for enrichment
-		if _, exists := uniqueAddrs[records[i].Address]; !exists {
-			uniqueAddrs[records[i].Address] = true
-			uniqueIPs = append(uniqueIPs, records[i].Address)
+		// Collect unique IPs for enrichment and count unique addresses/pairs
+		if groupBy == "pair" {
+			pairKey := records[i].SrcAddr + "|" + records[i].DstAddr
+			if _, exists := uniqueAddrs[pairKey]; !exists {
+				uniqueAddrs[pairKey] = true
+				// enrich both endpoints
+				if records[i].SrcAddr != "" {
+					uniqueIPs = append(uniqueIPs, records[i].SrcAddr)
+				}
+				if records[i].DstAddr != "" {
+					uniqueIPs = append(uniqueIPs, records[i].DstAddr)
+				}
+			}
+		} else {
+			if _, exists := uniqueAddrs[records[i].Address]; !exists {
+				uniqueAddrs[records[i].Address] = true
+				uniqueIPs = append(uniqueIPs, records[i].Address)
+			}
 		}
 	}
 
 	// Enrich all IPs concurrently
 	enrichments := EnrichIPs(uniqueIPs)
 
-	// Add enrichment data to records
+	// Add enrichment data to records (for pair mode, prefer destination enrichment if available)
 	for i := range records {
-		if enrichment, exists := enrichments[records[i].Address]; exists {
-			records[i].Enrichment = enrichment
+		if groupBy == "pair" {
+			if e, ok := enrichments[records[i].DstAddr]; ok {
+				records[i].Enrichment = e
+			} else if e, ok := enrichments[records[i].SrcAddr]; ok {
+				records[i].Enrichment = e
+			}
+		} else {
+			if enrichment, exists := enrichments[records[i].Address]; exists {
+				records[i].Enrichment = enrichment
+			}
 		}
 	}
 

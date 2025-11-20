@@ -629,30 +629,35 @@ func getExportersRequest(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, line)
 	} else if format == "json" {
 		// Return an array of objects with ip_inet and name from the exporters table
-		rows, qerr := config.Db.Query("SELECT ip_inet, name FROM exporters ORDER BY ip_inet")
+		rows, qerr := config.Db.Query("SELECT id,ip_inet, name FROM exporters ORDER BY ip_inet")
 		if qerr != nil {
 			http.Error(w, qerr.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
 		type exporterItem struct {
+			Id     int64  `json:"id"`
 			IPInet string `json:"ip_inet"`
 			Name   string `json:"name"`
 		}
 		list := make([]exporterItem, 0)
 		for rows.Next() {
+			var id sql.NullInt64
 			var ip sql.NullString
 			var name sql.NullString
-			if err := rows.Scan(&ip, &name); err != nil {
+			if err := rows.Scan(&id, &ip, &name); err != nil {
 				log.Println("scan exporters json:", err)
 				continue
 			}
-			item := exporterItem{IPInet: "", Name: ""}
+			item := exporterItem{Id: 0, IPInet: "", Name: ""}
 			if ip.Valid {
 				item.IPInet = ip.String
 			}
 			if name.Valid {
 				item.Name = name.String
+			}
+			if id.Valid {
+				item.Id = id.Int64
 			}
 			list = append(list, item)
 		}

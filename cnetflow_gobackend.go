@@ -113,7 +113,6 @@ func getFlowsDB(exporter string, last string) ([]FlowGEO, string) {
 			&flow.IPVersion,
 			&flow.First,
 			&flow.Last,
-			&flow.FlowHash,
 		)
 
 		flowGeo := FlowGEO{}

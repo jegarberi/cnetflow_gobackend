@@ -179,7 +179,7 @@
 
     <div class="chart-section">
         <div class="chart-container">
-            <div id="traffic" style="height: 400px;"></div>
+            <div id="chart_snmptraffic" style="height: 400px;"></div>
         </div>
 
         <div class="chart-container">
@@ -321,7 +321,7 @@
         }
 
         // Show loading indicators
-        document.getElementById('traffic').innerHTML = '<div class="loading">Loading interface metrics...</div>';
+        document.getElementById('chart_snmptraffic').innerHTML = '<div class="loading">Loading interface metrics...</div>';
         document.getElementById('bytes_in_src').innerHTML = '<div class="loading">Loading flow data...</div>';
         document.getElementById('bytes_in_dst').innerHTML = '<div class="loading">Loading flow data...</div>';
         document.getElementById('bytes_out_src').innerHTML = '<div class="loading">Loading flow data...</div>';
@@ -348,70 +348,28 @@
 
     async function loadInterfaceMetricsChart(exporterId, interfaceId, startTime, endTime) {
         try {
-            // Query interface_metrics table via backend
-            const startISO = new Date(startTime).toISOString();
-            const endISO = new Date(endTime).toISOString();
+            // Convert datetime-local to Unix epoch seconds (UTC)
+            const startUnix = Math.floor(new Date(startTime).getTime() / 1000);
+            const endUnix = Math.floor(new Date(endTime).getTime() / 1000);
 
-            const url = `/api/v1/metrics/${exporterId}/${interfaceId}`;
-            console.log('Fetching:', url);
-
-            // Since the existing endpoint doesn't support date params, we'll query the aggregated flow data instead
-            // Use PostgREST for more flexible querying
-            const postgrestUrl = 'http://192.168.100.78:3003/';
-            const query = `${postgrestUrl}interface_metrics?exporter=eq.${exporterId}&snmp_index=eq.${interfaceId}&inserted_at=gte.${startTime}&inserted_at=lte.${endTime}&order=inserted_at.asc`;
-
-            const result = await cache.fetchWithCache(query, {}, CacheTTL.SHORT);
-            const data = result.data;
-
-            if (!data || data.length === 0) {
-                document.getElementById('traffic').innerHTML = '<div class="loading">No interface metrics found</div>';
-                return;
+            // Clear previous chart before injecting backend-generated JS
+            const container = document.getElementById('chart_snmptraffic');
+            if (container) {
+                container.innerHTML = '';
             }
 
-            // Calculate bits per second from octet deltas
-            const seriesIn = [];
-            const seriesOut = [];
+            // Remove any previous injected scripts for this chart
+            document.querySelectorAll('script[data-role="ifmetrics"]').forEach(s => s.remove());
 
-            for (let i = 1; i < data.length; i++) {
-                const prev = data[i - 1];
-                const curr = data[i];
-                const lastTime = Math.floor(Date.parse(prev.inserted_at) / 1000);
-                const nowTime = Math.floor(Date.parse(curr.inserted_at) / 1000);
-                const interval = Math.max(1, nowTime - lastTime);
-
-                let rateIn = Math.floor(8 * (curr.octets_in - prev.octets_in) / interval);
-                let rateOut = Math.floor(8 * (curr.octets_out - prev.octets_out) / interval);
-
-                if (rateIn < 0) rateIn = 0;
-                if (rateOut < 0) rateOut = 0;
-
-                const timestamp = Date.parse(curr.inserted_at);
-                seriesIn.push([timestamp, rateIn]);
-                seriesOut.push([timestamp, rateOut]);
-            }
-
-            // Render chart
-            Highcharts.chart('traffic', {
-                title: { text: 'Interface Traffic Rate', align: 'left' },
-                subtitle: { text: 'bits per second (in/out)', align: 'left' },
-                chart: { zoomType: 'x' },
-                xAxis: { type: 'datetime' },
-                yAxis: { title: { text: 'bits/s' } },
-                legend: { layout: 'horizontal', align: 'left', verticalAlign: 'top' },
-                tooltip: {
-                    shared: true,
-                    valueSuffix: ' bps',
-                    valueDecimals: 0
-                },
-                series: [
-                    { type: 'line', name: 'bits/s in', data: seriesIn, color: '#667eea' },
-                    { type: 'line', name: 'bits/s out', data: seriesOut, color: '#764ba2' }
-                ]
-            });
-
+            // Inject backend JS that initializes the Highcharts time series
+            const script = document.createElement('script');
+            script.src = `/api/v1/metrics/${encodeURIComponent(exporterId)}/${encodeURIComponent(interfaceId)}/${startUnix}/${endUnix}/js?_=${Date.now()}`;
+            script.async = true;
+            script.setAttribute('data-role', 'ifmetrics');
+            document.body.appendChild(script);
         } catch (error) {
             console.error('Error loading interface metrics chart:', error);
-            document.getElementById('traffic').innerHTML = `<div class="error">Failed to load interface metrics: ${error.message}</div>`;
+            document.getElementById('chart_snmptraffic').innerHTML = `<div class="error">Failed to load interface metrics: ${error.message}</div>`;
         }
     }
 
@@ -419,7 +377,6 @@
         try {
             const startISO = new Date(startTime).toISOString();
             const endISO = new Date(endTime).toISOString();
-            const postgrestUrl = 'http://192.168.100.78:3003/';
 
             // Load flow data for different directions and sources/destinations
             const queries = [
